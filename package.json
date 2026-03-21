@@ -1,0 +1,10 @@
+{
+  "name": "tnzx-vs3-demo",
+  "version": "1.0.0",
+  "description": "TNZX VS3 Protocol — Stratum pool proof-of-concept with ghost share support",
+  "main": "src/stratum-demo.js",
+  "scripts": {
+    "start": "node src/stratum-demo.js"
+  },
+  "license": "MIT"
+}

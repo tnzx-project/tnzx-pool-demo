@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  vs3-demo:
+    build: .
+    container_name: tnzx-vs3-demo
+    restart: unless-stopped
+    ports:
+      - "4445:4444"
+      - "8091:8090"
+    environment:
+      - DAEMON_HOST=127.0.0.1
+      - DAEMON_PORT=18081
+      - GHOST_DIFF_MAX=500
+    networks:
+      - tnzx-demo
+
+networks:
+  tnzx-demo:
+    driver: bridge
