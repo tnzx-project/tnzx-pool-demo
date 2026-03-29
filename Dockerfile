@@ -2,7 +2,7 @@ FROM node:20-alpine
 
 LABEL org.opencontainers.image.title="TNZX VS3 Protocol Demo"
 LABEL org.opencontainers.image.description="Reference implementation of VS3 steganographic messaging over Monero mining"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.licenses="LGPL-2.1"
 
 WORKDIR /app
 COPY package.json .
@@ -10,6 +10,7 @@ COPY src/ src/
 COPY vs3-client.js .
 COPY test-ghost.js .
 COPY examples/ examples/
+COPY poc/ poc/
 
 # No npm install needed — zero external dependencies (only Node.js built-ins)
 

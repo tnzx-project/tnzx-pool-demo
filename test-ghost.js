@@ -22,6 +22,8 @@
  *   3. Encode a VS3 binary frame into 5-byte chunks.
  *   4. Submit each chunk as a share, hiding the bytes inside `nonce` and `ntime`.
  *   5. The pool reassembles the frame transparently upon receiving all chunks.
+ *
+ * @license LGPL-2.1
  */
 
 const net = require('net');
@@ -160,7 +162,7 @@ function encodeGhostShare(reqId, minerId, jobId, chunk, vs3To) {
 //                    The pool reassembles the VS3 frame and logs confirmation.
 //
 const sock = net.connect(PORT, HOST, () => {
-  console.log(`Connesso a ${HOST}:${PORT}`);
+  console.log(`Connected to ${HOST}:${PORT}`);
   let buf = '', jobId = null, minerId = null, step = 0;
 
   sock.on('data', (d) => {
@@ -179,20 +181,20 @@ const sock = net.connect(PORT, HOST, () => {
         jobId   = msg.result.job?.job_id;
         step = 1;
         if (jobId) {
-          // FIX: BUG-03+COMPAT-01 — portare step a 2 PRIMA di chiamare sendGhostMessage()
-          // così l'eventuale notifica job separata che arriva subito dopo il login
-          // non trigghera un secondo invio (step sarà già 2, non 1).
-          step = 2; // FIX: BUG-03 avanza step prima dell'invio
-          console.log('\nLogin OK. Invio ghost shares...\n');
+          // FIX: BUG-03+COMPAT-01 — advance step to 2 BEFORE calling sendGhostMessage()
+          // so a separate job notification arriving right after login
+          // does not trigger a second send (step will already be 2, not 1).
+          step = 2; // FIX: BUG-03 advance step before sending
+          console.log('\nLogin OK. Sending ghost shares...\n');
           sendGhostMessage();
-        } else { console.log('Login OK. Aspetto job...'); }
+        } else { console.log('Login OK. Waiting for job...'); }
 
       // Step 1 → 2: pool pushes a job notification (the common path when the pool
       // did not bundle a job inside the login response).
       } else if (msg.method === 'job' && msg.params?.job_id && step === 1) {
         jobId = msg.params.job_id;
-        step = 2; // FIX: BUG-03 step avanzato qui solo se eravamo ancora a 1
-        console.log(`\nJob: ${jobId}. Invio ghost shares...\n`);
+        step = 2; // FIX: BUG-03 advance step only if still at 1
+        console.log(`\nJob: ${jobId}. Sending ghost shares...\n`);
         sendGhostMessage();
       }
     }
@@ -207,29 +209,29 @@ const sock = net.connect(PORT, HOST, () => {
    * shares omit it — the pool retains it from chunk 0 for the entire frame.
    */
   function sendGhostMessage() {
-    const frame = buildVS3Frame('Ciao dal test ghost share TNZX!');
+    const frame = buildVS3Frame('Hello from VS3 ghost share test!');
     const chunks = chunkFrame(frame);
     console.log(`Frame: ${frame.length}B → ${chunks.length} ghost shares`);
     let reqId = 10, i = 0;
-    // FIX: COMPAT-02 — flow control con backpressure semplice basato su inFlight.
-    // Il client inviava share ogni 200ms senza attendere OK dal server, causando
-    // burst non controllati in presenza di latenza o buffer pieno lato server.
-    let inFlight = 0; // FIX: COMPAT-02 contatore share in volo (inviati, non ancora OK ricevuto)
-    const INFLIGHT_MAX = 3; // FIX: COMPAT-02 soglia backpressure: non superare 3 share in volo
+    // FIX: COMPAT-02 — simple backpressure flow control based on inFlight count.
+    // Without this, the client sends shares every 200ms without waiting for OK,
+    // causing uncontrolled bursts under latency or server-side buffer pressure.
+    let inFlight = 0; // FIX: COMPAT-02 in-flight share counter (sent, not yet OK)
+    const INFLIGHT_MAX = 3; // FIX: COMPAT-02 backpressure threshold: max 3 in-flight
 
-    // FIX: COMPAT-02 — gestione risposta OK agli share: decrementa inFlight.
-    // L'handler dati esistente (sopra) gestisce il login/job; aggiungiamo qui
-    // la gestione delle risposte agli share (id >= 10, result.status === 'OK').
+    // FIX: COMPAT-02 — handle share OK responses: decrement inFlight.
+    // The existing data handler (above) handles login/job; here we add
+    // handling for share responses (id >= 10, result.status === 'OK').
     sock.on('data', (d) => {
-      // Nota: il buffer buf è gestito dall'handler principale sopra; qui processiamo
-      // solo le risposte agli share per decrementare inFlight.
+      // Note: the buffer is managed by the main handler above; here we only
+      // process share responses to decrement inFlight.
       const raw = d.toString();
       for (const line of raw.split('\n')) {
         if (!line.trim()) continue;
         let r; try { r = JSON.parse(line); } catch (_) { continue; }
-        // Le risposte agli share hanno id >= 10 e result.status === 'OK'.
+        // Share responses have id >= 10 and result.status === 'OK'.
         if (r.id >= 10 && r.result?.status === 'OK') {
-          inFlight = Math.max(0, inFlight - 1); // FIX: COMPAT-02 decrementa inFlight
+          inFlight = Math.max(0, inFlight - 1); // FIX: COMPAT-02 decrement inFlight
         }
       }
     });
@@ -237,18 +239,18 @@ const sock = net.connect(PORT, HOST, () => {
     const iv = setInterval(() => {
       if (i >= chunks.length) {
         clearInterval(iv);
-        console.log('\nFatto. Controlla log pool per "[VS3] Ghost frame assembled".');
+        console.log('\nDone. Check pool log for "[VS3] Ghost frame assembled".');
         setTimeout(() => sock.destroy(), 1000);
         return;
       }
-      // FIX: COMPAT-02 — backpressure: se ci sono già INFLIGHT_MAX share in volo,
-      // salta questo tick e aspetta che il server risponda prima di inviare altri.
-      if (inFlight >= INFLIGHT_MAX) return; // FIX: COMPAT-02 aspetta OK prima di proseguire
+      // FIX: COMPAT-02 — backpressure: if INFLIGHT_MAX shares are already in flight,
+      // skip this tick and wait for the server to respond before sending more.
+      if (inFlight >= INFLIGHT_MAX) return; // FIX: COMPAT-02 wait for OK before continuing
       // vs3_to is passed only for i === 0; null for all remaining shares.
       const m = encodeGhostShare(reqId++, minerId, jobId, chunks[i], i === 0 ? FAKE_WALLET : null);
       console.log(`→ Share ${i+1}/${chunks.length}: nonce=${JSON.parse(m).params.nonce}`);
       sock.write(m + '\n');
-      inFlight++; // FIX: COMPAT-02 incrementa inFlight dopo ogni write
+      inFlight++; // FIX: COMPAT-02 increment inFlight after each write
       i++;
     }, 200);
   }
@@ -260,5 +262,5 @@ const sock = net.connect(PORT, HOST, () => {
   }) + '\n');
 });
 
-sock.on('error', (e) => console.error('Errore:', e.message));
-sock.on('close', () => console.log('Connessione chiusa.'));
+sock.on('error', (e) => console.error('Error:', e.message));
+sock.on('close', () => console.log('Connection closed.'));

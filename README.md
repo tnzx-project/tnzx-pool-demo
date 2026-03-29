@@ -1,180 +1,113 @@
-# tnzx-vs3-demo
+# TNZX VS3 — Pool Demo and Proxy POC
 
-Proof-of-concept: two people exchange text messages over a cryptocurrency mining connection. To any observer on the network, only normal mining traffic is visible.
+Proof-of-concept implementations of the [Visual Stratum protocol](https://github.com/tnzx-project/tnzx-protocol). Two deployment models demonstrated:
 
-Built on the [TNZX VS3 protocol](https://github.com/tnzx-project/tnzx-protocol). No external dependencies. No Monero daemon required.
+1. **VS3 Proxy** (`poc/`) — sits between any miner and any standard pool. Extracts steganographic data from real shares, intercepts ghost shares, routes messages. The pool is unmodified.
+2. **VS3-Aware Pool** (`src/stratum-demo.js`) — a Stratum server with native ghost share detection and message routing.
 
----
-
-## What is happening
-
-When a miner submits work to a pool, it sends small packets called "shares". Each share contains a `nonce` field — a number the miner is free to choose — and a `ntime` timestamp field.
-
-VS3 hides message bytes inside those fields. The pool extracts them, reassembles the original message, and delivers it to the recipient by embedding it in a standard job notification. A recipient running VS3-aware software reads the message; any other standard mining client ignores the extra field silently.
-
-The shares remain structurally valid Stratum protocol messages throughout.
-
-**Scope of this demo:** This repository demonstrates the steganographic transport layer only — VS3 encoding, frame reassembly, and pool-side delivery. End-to-end encryption (X25519 ECDH + AES-256-GCM) and Mining Gate access control are implemented as separate modules in the [reference implementation](https://github.com/tnzx-project/tnzx-protocol/tree/main/reference-impl) and are not wired into this demo. Messages in this demo travel in plaintext inside the steganographic channel.
+Both share the same frame format and encoding. No external dependencies. Node.js 16+.
 
 ---
 
-## Quick Start
+## Test Results (2026-03-29)
 
-**Requirements:** [Node.js](https://nodejs.org/) version 16 or later. That is all.
+All tests run against production mining pools.
 
-### Step 1 — Download
+| Test | Pool | Chain | Encoding | Message | Result |
+|------|------|-------|----------|---------|--------|
+| V1 stego | HashVault | Monero | 1 B/share (nonce LSB) | "I am safe. I love you." | **EXACT** |
+| V2 stego | Braiins Pool | Bitcoin | 3 B/share (nonce + extranonce2) | "I am safe. I love you." | **EXACT** |
+| Alice-Bob | HashVault | Monero | V3 ghost (5 B/share) | "I am safe. Meet me at the bridge." | **EXACT** |
 
-```
-git clone https://github.com/tnzx-project/tnzx-pool-demo.git
-cd tnzx-pool-demo
-```
-
-### Step 2 — Open three terminal windows
-
-All three must be open at the same time. Start them in this order.
+Timestamped transcripts: [`poc/results/`](poc/results/)
 
 ---
 
-**Terminal 1 — start the pool**
+## Quick Start — Proxy (any pool)
 
+```bash
+# V1 steganography proof on real Monero pool
+node poc/run-v1-proof.js
+
+# V2 steganography proof on real Bitcoin pool
+node poc/run-v2-proof.js
+
+# Alice-to-Bob messaging on real pool
+node poc/run-alice-bob-proof.js
 ```
+
+See [`poc/README.md`](poc/README.md) for full documentation.
+
+## Quick Start — Pool Demo (self-contained)
+
+```bash
+# Terminal 1: start pool
 node src/stratum-demo.js
+
+# Terminal 2: Bob listens
+node vs3-client.js listen <bob_wallet>
+
+# Terminal 3: Alice sends
+node vs3-client.js send <alice_wallet> <bob_wallet> "Hello Bob!"
 ```
 
-You should see:
-```
-[VS3-Demo] TNZX VS3 Protocol Reference Implementation
-[VS3-Demo] Stratum listening on :4444
-[VS3-Demo] Stats API on :8090/stats
-[VS3-Demo] Daemon: 127.0.0.1:38081
-```
-
-Leave this running.
+See [`TECHNICAL_GUIDE.md`](TECHNICAL_GUIDE.md) for code walkthrough.
 
 ---
 
-**Terminal 2 — Bob connects (he will receive the message)**
+## Architecture
 
-On Windows:
 ```
-.\examples\bob.ps1
+Model 1 — Proxy (no pool modification):
+
+  [Alice] --Stratum--> [VS3 Proxy] --Stratum--> [Any Standard Pool]
+  [Bob]   --Stratum--> [VS3 Proxy]               (pays both miners)
+                            |
+                      V1/V2 extraction from real shares
+                      V3 ghost share interception
+                      Message routing between miners
+
+Model 2 — VS3-Aware Pool (native support):
+
+  [Alice] --Stratum--> [VS3 Pool] --routes--> [Bob]
+                            |
+                      Ghost share detection
+                      Frame assembly
+                      Job notification injection
 ```
 
-On Linux/macOS:
-```
-node vs3-client.js listen 4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
-```
+## Encoding Profiles
 
-You should see:
-```
-[VS3] Listener → 127.0.0.1:4444
-[VS3] Connected. Waiting for messages...
-```
+| Profile | Bytes/share | How | Stealth | Chain |
+|---------|-------------|-----|---------|-------|
+| **V1** | 1 | Nonce LSB nibbles (real share) | Maximum | Any |
+| **V2** | 3 | V1 + extranonce2 (real share) | Maximum | Bitcoin |
+| **V3** | 5 | Ghost share (sentinel 0xAA) | Lower | Monero |
 
-Leave this running.
+V1 and V2 are truly steganographic — the shares pass full PoW validation. V3 is an optional bandwidth boost with a detectable sentinel.
 
 ---
 
-**Terminal 3 — Alice sends a message to Bob**
-
-On Windows:
-```
-.\examples\alice.ps1
-```
-
-On Linux/macOS:
-```
-node vs3-client.js send 4222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222 4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 "Hello Bob! This message is hidden in mining traffic."
-```
-
----
-
-### What you should observe
-
-**Terminal 1 (pool):**
-```
-[VS3-Demo] Miner login: 4111111111111111...
-[VS3-Demo] Miner login: 4222222222222222...
-[VS3] Frame assembled from 422222222222... → 411111111111... (60B)
-[VS3] Message: "Hello Bob! This message is hidden in mining traffic."
-```
-
-**Terminal 2 (Bob):**
-```
-[VS3] ← Message received at HH:MM:SS:
-      "Hello Bob! This message is hidden in mining traffic."
-      (frame: 60B, version: 0x03, type: 0x01)
-```
-
-**Terminal 3 (Alice):**
-```
-[VS3] Frame: 60B → 12 ghost shares
-      Share  1/12 → nonce=aaaa0301
-      ...
-[VS3] All shares sent. Closing connection.
-```
-
-Each nonce begins with `aa` (the 0xAA sentinel byte). The message bytes follow in plain hex — encryption is a separate layer not included in this demo.
-
----
-
-## Bidirectional chat
-
-Both parties can type and reply in real time.
-
-**Terminal 1:** `node src/stratum-demo.js`
-
-**Terminal 2 (Bob):**
-```
-.\examples\bob-chat.ps1
-```
-
-**Terminal 3 (Alice):**
-```
-.\examples\alice-chat.ps1
-```
-
-Type a message and press Enter. The other side receives it within a second.
-
----
-
-## Test the upload path only
-
-No recipient needed:
+## Repository Structure
 
 ```
-node test-ghost.js 127.0.0.1 4444
+src/stratum-demo.js     VS3-aware Stratum pool (~730 lines)
+vs3-client.js           VS3 ghost share client
+test-ghost.js           Upload path test
+poc/
+  vs3-proxy.js          VS3 middleware proxy (~700 lines)
+  run-v1-proof.js       V1 proof on real Monero pool
+  run-v2-proof.js       V2 proof on real Bitcoin pool
+  run-alice-bob-proof.js  Bidirectional messaging proof
+  results/              Timestamped transcripts
+  README.md             Proxy documentation
+TECHNICAL_GUIDE.md      Pool demo code walkthrough
 ```
 
-Expected pool output:
-```
-[VS3] Frame assembled from 4111111111... → broadcast (39B)
-[VS3] Message: "Ciao dal test ghost share TNZX!"
-```
-
----
-
-## Stats API
-
-While the pool is running:
-
-```
-GET http://localhost:8090/stats
-```
-
-Returns:
-```json
-{ "connected": 2, "ghostShares": 12, "vs3Frames": 1, "uptime": 18.2 }
-```
-
-`ghostShares` counts individual shares received; `vs3Frames` counts complete reassembled messages.
-
----
-
-## Protocol specification
+## Protocol Specification
 
 [tnzx-project/tnzx-protocol](https://github.com/tnzx-project/tnzx-protocol)
 
 ## License
 
-MIT
+LGPL-2.1

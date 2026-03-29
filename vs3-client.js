@@ -39,7 +39,7 @@
  *   - Recipient terminal shows: [VS3] ← Message received: "..."
  *   - No message content is visible in the ghost share submissions
  *
- * @license MIT
+ * @license LGPL-2.1
  */
 
 const net      = require('net');

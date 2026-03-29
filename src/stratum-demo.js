@@ -125,15 +125,15 @@
  *  NUMERICAL EXAMPLE — sending "Hello" (5 bytes) as a single fragment:
  *
  *  Index:  0    1    2    3    4    5    6    7    8    9   10   11   12
- *  Hex:   AA   01   01   00   01   00   01   05   48   65   6C   6C   6F
+ *  Hex:   AA   03   01   00   01   00   01   05   48   65   6C   6C   6F
  *         ↑    ↑    ↑    ↑────↑    ↑    ↑    ↑    ↑────────────────────
  *         │    │    │    msg_id    │    │    │    payload = "Hello"
  *         │    │    type=text      │    │    payload_len = 5
- *         │    version=1           │    fragment_total = 1
+ *         │    version=3           │    fragment_total = 1
  *         MAGIC (sentinel)         fragment_index = 0
  *
  *  This 13-byte frame is split across ceil(13/5) = 3 ghost shares:
- *    Share 1 nonce/ntime → bytes [AA 01 01 00 01]  (sentinel + first 4 bytes)
+ *    Share 1 nonce/ntime → bytes [AA 03 01 00 01]  (sentinel + first 4 bytes)
  *    Share 2 nonce/ntime → bytes [00 01 05 48 65]
  *    Share 3 nonce/ntime → bytes [6C 6C 6F -- --]  (last 3, two slots unused)
  *
@@ -141,6 +141,8 @@
  * Encryption (X25519 + AES-256-GCM, HKDF-SHA256) is a separate layer
  * not included here — the transport is intentionally kept minimal so the
  * steganographic mechanism can be audited without cryptographic tooling.
+ *
+ * @license LGPL-2.1
  */
 
 const net   = require('net');
@@ -222,9 +224,9 @@ function daemonRPC(method, params = []) {
 //
 const GHOST_MAGIC  = 0xAA;
 const GHOST_HEADER = 8;
-// FIX: SPEC-02 — costante version byte corrente del protocollo VS3.
-// Version 0x04/0x05/0x06 (BURST/GHOST/TURBO) sono versioni future note ma
-// non ancora supportate da questo server; vengono loggati e scartati senza crash.
+// FIX: SPEC-02 — current VS3 protocol version byte constant.
+// Versions 0x04/0x05/0x06 (BURST/GHOST/TURBO) are known future versions
+// not yet supported by this server; they are logged and gracefully skipped.
 const VERSION_V3   = 0x03; // FIX: SPEC-02
 
 // ── Stratum Server ──────────────────────────────────────────────────────────
@@ -319,10 +321,10 @@ class StratumDemo extends EventEmitter {
 
     sock.on('data', d => {
       buf += d.toString();
-      // FIX: SEC-03 — se buf supera 64 KB senza newline, chiudi la connessione
-      // e logga l'evento. Protegge da client malevoli che inviano dati senza \n.
+      // FIX: SEC-03 — if buf exceeds 64 KB without newline, close the connection
+      // and log the event. Protects against malicious clients sending data without \n.
       if (buf.length > 65536) {
-        console.warn(`[VS3-Demo] Buffer overflow (>${65536}B senza newline) da miner ${id} — connessione chiusa`); // FIX: SEC-03
+        console.warn(`[VS3-Demo] Buffer overflow (>${65536}B without newline) from miner ${id} — connection closed`); // FIX: SEC-03
         sock.destroy();
         return;
       }
@@ -356,8 +358,8 @@ class StratumDemo extends EventEmitter {
     // as the sender's identity for message routing — no separate registration,
     // account creation, or identity system is required.
 
-    // FIX: SEC-01 — validare wallet address prima di autorizzare la sessione.
-    // Indirizzi Monero validi: stringa, lunghezza 95-106 caratteri, inizia con '4' o '8'.
+    // FIX: SEC-01 — validate wallet address before authorizing the session.
+    // Valid Monero addresses: string, length 95-106 chars, starts with '4' or '8'.
     const wallet = params.login;
     if (
       typeof wallet !== 'string' ||
@@ -365,9 +367,9 @@ class StratumDemo extends EventEmitter {
       wallet.length > 106 ||
       (wallet[0] !== '4' && wallet[0] !== '8')
     ) {
-      this._send(miner, { id, error: { code: -1, message: 'Invalid wallet address' } }); // FIX: SEC-01 risposta errore
-      miner.sock.destroy(); // FIX: SEC-01 chiudi la connessione
-      console.warn(`[VS3-Demo] Login rifiutato (wallet non valido): ${String(wallet).slice(0,20)}`);
+      this._send(miner, { id, error: { code: -1, message: 'Invalid wallet address' } }); // FIX: SEC-01 error response
+      miner.sock.destroy(); // FIX: SEC-01 close the connection
+      console.warn(`[VS3-Demo] Login rejected (invalid wallet): ${String(wallet).slice(0,20)}`);
       return;
     }
 
@@ -429,7 +431,7 @@ class StratumDemo extends EventEmitter {
     }
     miner.ghostSharesPerMinute++;
     if (miner.ghostSharesPerMinute > 120) {
-      return; // FIX: SEC-02 ignora silenziosamente oltre il limite
+      return; // FIX: SEC-02 silently ignore beyond rate limit
     }
 
     // ── Step 1: Extract the 5 hidden payload bytes ─────────────────────────
@@ -526,45 +528,45 @@ class StratumDemo extends EventEmitter {
       miner.ghostBuffer = miner.ghostBuffer.slice(frameSize);
       this.stats.vs3Frames++;
 
-      // FIX: SPEC-04 — Fragment reassembly per messaggi multi-fragment.
+      // FIX: SPEC-04 — Fragment reassembly for multi-fragment messages.
       // frame[3..4] = message_id (big-endian), frame[5] = fragment_index,
-      // frame[6] = fragment_total. Se fragment_total === 1 emetti subito.
-      // Altrimenti accumula in miner.fragmentBuffers (Map<message_id, ...>)
-      // con timeout di 30 secondi per fragment incompleti.
+      // frame[6] = fragment_total. If fragment_total === 1, emit immediately.
+      // Otherwise accumulate in miner.fragmentBuffers (Map<message_id, ...>)
+      // with a 30-second timeout for incomplete fragments.
       const msgId         = (frame[3] << 8) | frame[4];
       const fragIndex     = frame[5];
       const fragTotal     = frame[6];
       const fragPayload   = frame.slice(8, 8 + frame[7]);
 
       if (fragTotal === 1) {
-        // Messaggio single-fragment: emit immediato (comportamento precedente).
-        // FIX: BUG-04 — usa shareGhostTo (locale a questo share) invece di miner.ghostTo.
-        // FIX: SPEC-03 — espone il type byte (frame[2]) nell'evento emesso.
+        // Single-fragment message: emit immediately.
+        // FIX: BUG-04 — use shareGhostTo (local to this share) instead of miner.ghostTo.
+        // FIX: SPEC-03 — expose the type byte (frame[2]) in the emitted event.
         // Type codes: 0x01=text, 0x02=ack, 0x03=ping (MSG_TYPE in stego-core/index.js).
-        const frameType = frame[2]; // FIX: SPEC-03 leggi type byte
+        const frameType = frame[2]; // FIX: SPEC-03 read type byte
         console.log(`[VS3] Frame assembled from ${miner.wallet?.slice(0,12)}... → ${miner.ghostTo?.slice(0,12) || 'broadcast'} (${frame.length}B)`);
         this.emit('vs3-frame', { from: miner.wallet, to: miner.ghostTo || null, frame, type: frameType }); // FIX: BUG-04, SPEC-03
         miner.ghostTo = null; // reset after delivery
       } else {
-        // Messaggio multi-fragment: accumula fino all'arrivo di tutti i pezzi.
+        // Multi-fragment message: accumulate until all pieces arrive.
         if (!miner.fragmentBuffers) miner.fragmentBuffers = new Map(); // FIX: SPEC-04
         if (!miner.fragmentBuffers.has(msgId)) {
-          // Prima volta che vediamo questo message_id: inizializza la struttura
-          // e arma un timeout di 30 s per scartare fragment incompleti.
+          // First time seeing this message_id: initialize the structure
+          // and arm a 30s timeout to discard incomplete fragments.
           const timer = setTimeout(() => {
             if (miner.fragmentBuffers && miner.fragmentBuffers.has(msgId)) {
-              console.warn(`[VS3] Fragment timeout per message_id=0x${msgId.toString(16)} — scartati`); // FIX: SPEC-04
+              console.warn(`[VS3] Fragment timeout for message_id=0x${msgId.toString(16)} — discarded`); // FIX: SPEC-04
               miner.fragmentBuffers.delete(msgId);
             }
-          }, 30000); // FIX: SPEC-04 timeout 30 secondi
+          }, 30000); // FIX: SPEC-04 30-second timeout
           miner.fragmentBuffers.set(msgId, {
             fragments: new Array(fragTotal).fill(null),
             received: 0,
             total: fragTotal,
-            header: frame.slice(0, 8), // conserva header del primo fragment
+            header: frame.slice(0, 8), // preserve header from first fragment
             timer,
-            // FIX: BUG-04 — il campo to è associato al message_id, non alla sessione TCP.
-            // shareGhostTo è non-null solo nel primo share del messaggio (quello che porta vs3_to).
+            // FIX: BUG-04 — the to field is associated with message_id, not the TCP session.
+            // shareGhostTo is non-null only on the first share of the message (the one carrying vs3_to).
             to: shareGhostTo
           });
         }
@@ -573,20 +575,20 @@ class StratumDemo extends EventEmitter {
           entry.fragments[fragIndex] = fragPayload;
           entry.received++;
           if (entry.received === entry.total) {
-            // Tutti i fragment ricevuti: concatena payload e ricostruisci frame.
-            clearTimeout(entry.timer); // FIX: SPEC-04 cancella timeout
+            // All fragments received: concatenate payload and reassemble frame.
+            clearTimeout(entry.timer); // FIX: SPEC-04 cancel timeout
             miner.fragmentBuffers.delete(msgId);
             const fullPayload = Buffer.concat(entry.fragments);
-            // Ricostruisci un frame sintetico con il payload completo.
+            // Reassemble a synthetic frame with the complete payload.
             const reassembled = Buffer.alloc(GHOST_HEADER + fullPayload.length);
             entry.header.copy(reassembled, 0);
             reassembled[5] = 0;                   // fragment_index = 0
-            reassembled[6] = 1;                   // fragment_total = 1 (ora completo)
-            reassembled[7] = fullPayload.length;  // aggiorna payload_len
+            reassembled[6] = 1;                   // fragment_total = 1 (now complete)
+            reassembled[7] = fullPayload.length;  // update payload_len
             fullPayload.copy(reassembled, GHOST_HEADER);
-            console.log(`[VS3] Multi-fragment message_id=0x${msgId.toString(16)} reassemblato (${entry.total} frammenti, ${reassembled.length}B)`); // FIX: SPEC-04
-            // FIX: BUG-04 — usa entry.to (associato al message_id) invece di miner.ghostTo.
-            // FIX: SPEC-03 — espone il type byte (reassembled[2]) nell'evento emesso.
+            console.log(`[VS3] Multi-fragment message_id=0x${msgId.toString(16)} reassembled (${entry.total} fragments, ${reassembled.length}B)`); // FIX: SPEC-04
+            // FIX: BUG-04 — use entry.to (associated with message_id) instead of miner.ghostTo.
+            // FIX: SPEC-03 — expose the type byte (reassembled[2]) in the emitted event.
             // Type codes: 0x01=text, 0x02=ack, 0x03=ping (MSG_TYPE in stego-core/index.js).
             this.emit('vs3-frame', { from: miner.wallet, to: entry.to, frame: reassembled, type: reassembled[2] }); // FIX: BUG-04, SPEC-03
             miner.ghostTo = null; // reset after delivery (mirrors single-fragment path)
@@ -667,13 +669,13 @@ class StratumDemo extends EventEmitter {
     if (miner.pendingFrames?.length) {
       job.vs3 = miner.pendingFrames.shift().toString('hex');
     }
-    // FIX: BUG-07 — limitare this.jobs a 100 entry (FIFO) per evitare memory leak.
-    // I job vengono aggiunti ma mai rimossi: senza questo limite la Map cresce
-    // illimitatamente per tutta la durata del processo. Il campo jobs esiste per
-    // futura validazione del job_id nelle submit (non ancora implementata in questo demo).
+    // FIX: BUG-07 — cap this.jobs at 100 entries (FIFO) to prevent memory leak.
+    // Jobs are added but never removed: without this cap the Map grows
+    // unboundedly for the lifetime of the process. The jobs field exists for
+    // Future job_id validation in submits (not yet implemented in this demo).
     this.jobs.set(jobId, job);
     if (this.jobs.size > 100) {
-      // Rimuovi la entry più vecchia (prima chiave inserita nella Map).
+      // Remove oldest entry (first key inserted in the Map).
       this.jobs.delete(this.jobs.keys().next().value); // FIX: BUG-07 FIFO eviction
     }
     return job;
@@ -713,9 +715,9 @@ class StratumDemo extends EventEmitter {
 function startAPI(stratum) {
   http.createServer((req, res) => {
     if (req.url !== '/stats') { res.writeHead(404); res.end(); return; }
-    // FIX: SEC-04 — rimosso Access-Control-Allow-Origin: * dall'endpoint /stats.
-    // L'endpoint è per uso locale/admin e non deve essere accessibile cross-origin:
-    // il CORS aperto espone i counter VS3 a qualsiasi origine browser.
+    // FIX: SEC-04 — removed Access-Control-Allow-Origin: * from /stats endpoint.
+    // This endpoint is for local/admin use and should not be accessible cross-origin:
+    // open CORS would expose VS3 counters to any browser origin.
     res.writeHead(200, { 'Content-Type':'application/json' });
     res.end(JSON.stringify({ ...stratum.stats, uptime: process.uptime() }));
   }).listen(CFG.apiPort, () => console.log(`[VS3-Demo] Stats API on :${CFG.apiPort}/stats`));
@@ -731,7 +733,7 @@ function startAPI(stratum) {
 // the plaintext to the user interface.
 //
 const stratum = new StratumDemo();
-// FIX: SPEC-03 — il destructuring ora include `type` (frame[2]), esposto dall'emit.
+// FIX: SPEC-03 — destructuring now includes `type` (frame[2]), exposed by emit.
 stratum.on('vs3-frame', ({ from, to, frame, type }) => {
   // frame[0..7] = VS3 header (see frame format above)
   // frame[8..]  = plaintext payload (in this demo; encrypted in production)

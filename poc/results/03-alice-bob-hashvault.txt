@@ -1,0 +1,58 @@
+================================================================
+  VS3 PROOF TRANSCRIPT — Alice-to-Bob Messaging on Real Pool
+  Pool: HashVault (pool.hashvault.pro:3333, Monero)
+  Channel: V3 ghost shares (5 bytes/share)
+  Date: 2026-03-29T14:17:01.194Z
+================================================================
+
+2026-03-29T14:17:01.199Z [PROXY] Started on :14444 -> HashVault
+
+2026-03-29T14:17:01.200Z [BOB] Connecting...
+2026-03-29T14:17:01.407Z [BOB] Logged in: minerId=8853852d-46dc-4d54-a3a6-0aff1d7b3eff
+2026-03-29T14:17:01.408Z [ALICE] Connecting...
+2026-03-29T14:17:01.458Z [ALICE] Logged in: minerId=a4e377a9-1604-44a8-8b6b-a23bcec7ea74
+
+2026-03-29T14:17:01.464Z --- Phase 1: Alice activates Mining Gate (3 real shares) ---
+2026-03-29T14:17:01.464Z [ALICE] Share 1/3 nonce=52b6f250 (real, forwarded to pool)
+2026-03-29T14:17:01.680Z [ALICE] Share 2/3 nonce=76817baf (real, forwarded to pool)
+2026-03-29T14:17:01.889Z [ALICE] Share 3/3 nonce=320d7fdc (real, forwarded to pool)
+2026-03-29T14:17:01.889Z [GATE] Mining Gate OPENED for 44AFFq5kSiGBoZ4NMDwY
+
+2026-03-29T14:17:02.610Z --- Phase 2: Alice sends message to Bob via ghost shares ---
+2026-03-29T14:17:02.610Z [ALICE] Message: "I am safe. Meet me at the bridge."
+2026-03-29T14:17:02.610Z [ALICE] Frame: 41 bytes -> 9 ghost shares (5 B/share)
+
+2026-03-29T14:17:02.610Z [ALICE] Ghost share 1/9 (+ vs3_to=bob) (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:02.770Z [ALICE] Ghost share 2/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:02.930Z [ALICE] Ghost share 3/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:03.091Z [ALICE] Ghost share 4/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:03.252Z [ALICE] Ghost share 5/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:03.412Z [ALICE] Ghost share 6/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:03.570Z [ALICE] Ghost share 7/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:03.727Z [ALICE] Ghost share 8/9 (intercepted by proxy, NOT forwarded)
+2026-03-29T14:17:03.891Z [ALICE] Ghost share 9/9 (intercepted by proxy, NOT forwarded)
+
+2026-03-29T14:17:04.053Z [BOB] Waiting for message delivery...
+
+================================================================
+  RESULTS
+================================================================
+
+  Alice sent:    "I am safe. Meet me at the bridge."
+  Bob received:  "I am safe. Meet me at the bridge."
+  Match: EXACT
+
+  Proxy statistics:
+    Real shares forwarded to pool:  3
+    Ghost shares intercepted:       9
+    VS3 frames assembled:           1
+
+  What the pool (HashVault) saw:
+    Two miners logged in: alice and bob
+    3 real shares from Alice (Mining Gate)
+    Zero ghost shares reached the pool
+    No awareness that a message was exchanged
+
+================================================================
+  2026-03-29T14:17:04.054Z
+================================================================
