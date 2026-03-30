@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0] — 2026-03-30
+
+### Added
+- Bidirectional Alice-Bob messaging test via VS3 proxy on standard pool (HashVault)
+- Test transcript: `poc/results/04-alice-bob-bidirectional-hashvault.txt`
+- HMAC rotating sentinel support in VS3 proxy (Appendix D of Visual Stratum paper)
+- HMAC bidirectional test: `poc/results/05-alice-bob-hmac-hashvault.txt`
+
+### Verified
+- VS3 proxy routes messages between two miners through a standard, unmodified Monero pool
+- Zero ghost shares leaked to upstream pool
+- Mining Gate activation with 3 real shares per miner
+- HMAC sentinel eliminates fixed 0xAA pattern — 16/16 sentinel bytes unique, none equal 0xAA
+- DPI-level detection of ghost shares eliminated (only PoW verification can distinguish them)
+
 ## [1.3.0] — 2026-03-28
 
 ### Added

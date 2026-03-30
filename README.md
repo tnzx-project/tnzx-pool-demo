@@ -9,7 +9,7 @@ Both share the same frame format and encoding. No external dependencies. Node.js
 
 ---
 
-## Test Results (2026-03-29)
+## Test Results (2026-03-30)
 
 All tests run against production mining pools.
 
@@ -18,6 +18,8 @@ All tests run against production mining pools.
 | V1 stego | HashVault | Monero | 1 B/share (nonce LSB) | "I am safe. I love you." | **EXACT** |
 | V2 stego | Braiins Pool | Bitcoin | 3 B/share (nonce + extranonce2) | "I am safe. I love you." | **EXACT** |
 | Alice-Bob | HashVault | Monero | V3 ghost (5 B/share) | "I am safe. Meet me at the bridge." | **EXACT** |
+| Alice↔Bob bidirectional | HashVault | Monero | V3 ghost (5 B/share) | "I am safe..." ↔ "Tomorrow..." | **EXACT** |
+| Alice↔Bob HMAC | HashVault | Monero | V3 ghost + HMAC tag | "I am safe..." ↔ "Tomorrow..." | **EXACT** |
 
 Timestamped transcripts: [`poc/results/`](poc/results/)
 

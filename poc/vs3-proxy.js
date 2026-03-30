@@ -30,6 +30,35 @@ const VERSION_V3   = 0x03;
 const ZERO_RESULT  = '0'.repeat(64);
 const WS_GUID      = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
+// ── HMAC Ghost Tag (Appendix D) ─────────────────────────────────────────────
+// Replaces fixed 0xAA sentinel with HMAC-derived per-share tag.
+// Key: HKDF-SHA256(miner_pass, pool_salt, "tnzx-ghost-v1")
+// Tag: HMAC-SHA256(session_key, nonce[1..3])[0]
+// False positive rate: 1/256, resolved by frame header validation.
+
+function hmacDeriveKey(minerPass, poolSalt) {
+  const ikm  = Buffer.from(minerPass, 'utf8');
+  const salt = Buffer.from(poolSalt, 'utf8');
+  const info = Buffer.from('tnzx-ghost-v1', 'utf8');
+  if (typeof crypto.hkdfSync === 'function') {
+    return Buffer.from(crypto.hkdfSync('sha256', ikm, salt, info, 32));
+  }
+  // Fallback HKDF (Node < 20)
+  const prk = crypto.createHmac('sha256', salt).update(ikm).digest();
+  return crypto.createHmac('sha256', prk)
+    .update(Buffer.concat([info, Buffer.from([1])]))
+    .digest();
+}
+
+function hmacSentinel(sessionKey, nonceData) {
+  return crypto.createHmac('sha256', sessionKey).update(nonceData).digest()[0];
+}
+
+function hmacVerify(sessionKey, nonceBuf) {
+  if (!nonceBuf || nonceBuf.length < 4) return false;
+  return nonceBuf[0] === hmacSentinel(sessionKey, nonceBuf.slice(1, 4));
+}
+
 // ── Mining Gate ──────────────────────────────────────────────────────────────
 
 const GATE_INACTIVE  = 'INACTIVE';
@@ -154,6 +183,7 @@ class VS3Proxy extends EventEmitter {
     this.upstreamHost = opts.upstreamHost || '127.0.0.1';
     this.upstreamPort = opts.upstreamPort || 3333;
     this.gateOpts     = opts.gate         || {};
+    this.hmacSalt     = opts.hmacSalt    || null; // null = legacy 0xAA mode
     this.server       = null;
     this.wsServer     = null;
     this.connections  = new Map();
@@ -232,6 +262,8 @@ class VS3Proxy extends EventEmitter {
       lastJob: null,
       wallet: null,
       minerId: null,
+      // HMAC session key (derived at login if hmacSalt set)
+      sessionKey: null,
       // Protocol detection (monero vs bitcoin)
       protocol: null, // 'monero' | 'bitcoin'
       extranonce2Size: 4, // bitcoin: size of extranonce2 field
@@ -299,6 +331,10 @@ class VS3Proxy extends EventEmitter {
       if (msg.method === 'login' && msg.params) {
         conn.wallet = msg.params.login;
         if ((msg.params.agent || '').includes('vs3')) conn.v1Active = true;
+        // HMAC key derivation (Appendix D)
+        if (this.hmacSalt && msg.params.pass) {
+          conn.sessionKey = hmacDeriveKey(msg.params.pass, this.hmacSalt);
+        }
         // Sanitize agent string before forwarding to upstream pool
         const sanitized = { ...msg, params: { ...msg.params, agent: 'XMRig/6.21.0' } };
         this._sendToUpstream(conn, JSON.stringify(sanitized));
@@ -309,6 +345,10 @@ class VS3Proxy extends EventEmitter {
       if (msg.method === 'mining.authorize' && Array.isArray(msg.params)) {
         conn.wallet = msg.params[0];
         conn.v1Active = true; // V1/V2 always active on Bitcoin
+        // HMAC key derivation (Appendix D)
+        if (this.hmacSalt && msg.params[1]) {
+          conn.sessionKey = hmacDeriveKey(msg.params[1], this.hmacSalt);
+        }
       }
 
       this._sendToUpstream(conn, line);
@@ -323,8 +363,12 @@ class VS3Proxy extends EventEmitter {
     const nonce  = (msg.params.nonce || '').toLowerCase();
     const result = (msg.params.result || '').toLowerCase();
 
-    // Ghost share? (V3-Compact: sentinel nonce + zero result)
-    if (nonce.startsWith('aa') && result === ZERO_RESULT) {
+    // Ghost share detection: HMAC mode or legacy 0xAA sentinel
+    const nonceBuf = Buffer.from(nonce.padStart(8, '0'), 'hex');
+    const isGhost = conn.sessionKey
+      ? (hmacVerify(conn.sessionKey, nonceBuf) && result === ZERO_RESULT)
+      : (nonce.startsWith('aa') && result === ZERO_RESULT);
+    if (isGhost) {
       if (!conn.gate.isOpen()) {
         this.stats.ghostSharesBlocked++;
         this._sendToMiner(conn, { id: msg.id, result: { status: 'OK' } });
@@ -354,8 +398,12 @@ class VS3Proxy extends EventEmitter {
     const nonceLower = (nonce || '').toLowerCase();
     const en2Lower   = (extranonce2 || '').toLowerCase();
 
-    // Ghost share? (V3-Standard: nonce sentinel 0xAA + extranonce2 sentinel 0xAA in first byte)
-    if (nonceLower.startsWith('aa') && en2Lower.startsWith('aa')) {
+    // Ghost share detection: HMAC mode or legacy 0xAA sentinel
+    const nonceBuf = Buffer.from(nonceLower.padStart(8, '0'), 'hex');
+    const isGhost = conn.sessionKey
+      ? hmacVerify(conn.sessionKey, nonceBuf)
+      : (nonceLower.startsWith('aa') && en2Lower.startsWith('aa'));
+    if (isGhost) {
       if (!conn.gate.isOpen()) {
         this.stats.ghostSharesBlocked++;
         this._sendToMiner(conn, { id: msg.id, result: true, error: null });
