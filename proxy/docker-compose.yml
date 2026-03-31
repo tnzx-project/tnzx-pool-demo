@@ -1,0 +1,20 @@
+# VS3 Proxy — Docker Compose
+#
+# Usage:
+#   UPSTREAM=pool.hashvault.pro:3333 docker-compose up
+#
+# Then point your miner to localhost:13333
+
+services:
+  vs3-proxy:
+    build:
+      context: ..
+      dockerfile: proxy/Dockerfile
+    ports:
+      - "13333:13333"   # Stratum (miner connects here)
+      - "19090:19090"   # WebSocket relay
+    command: ["--upstream", "${UPSTREAM:-pool.hashvault.pro:3333}", "--verbose"]
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
