@@ -540,7 +540,8 @@ class StratumDemo extends EventEmitter {
 
       if (fragTotal === 1) {
         // Single-fragment message: emit immediately.
-        // FIX: BUG-04 — use shareGhostTo (local to this share) instead of miner.ghostTo.
+        // FIX: BUG-04 — use miner.ghostTo (persisted from the first share's vs3_to).
+        // For multi-fragment, miner.ghostTo is saved in entry.to at creation (line 570).
         // FIX: SPEC-03 — expose the type byte (frame[2]) in the emitted event.
         // Type codes: 0x01=text, 0x02=ack, 0x03=ping (MSG_TYPE in stego-core/index.js).
         const frameType = frame[2]; // FIX: SPEC-03 read type byte
@@ -566,8 +567,8 @@ class StratumDemo extends EventEmitter {
             header: frame.slice(0, 8), // preserve header from first fragment
             timer,
             // FIX: BUG-04 — the to field is associated with message_id, not the TCP session.
-            // shareGhostTo is non-null only on the first share of the message (the one carrying vs3_to).
-            to: shareGhostTo
+            // Use miner.ghostTo (persisted from the first share carrying vs3_to).
+            to: miner.ghostTo
           });
         }
         const entry = miner.fragmentBuffers.get(msgId);
@@ -669,12 +670,12 @@ class StratumDemo extends EventEmitter {
     if (miner.pendingFrames?.length) {
       job.vs3 = miner.pendingFrames.shift().toString('hex');
     }
-    // FIX: BUG-07 — cap this.jobs at 100 entries (FIFO) to prevent memory leak.
+    // FIX: BUG-07 — cap this.jobs at 50 entries (FIFO) to prevent memory leak.
     // Jobs are added but never removed: without this cap the Map grows
     // unboundedly for the lifetime of the process. The jobs field exists for
-    // Future job_id validation in submits (not yet implemented in this demo).
+    // future job_id validation in submits (not yet implemented in this demo).
     this.jobs.set(jobId, job);
-    if (this.jobs.size > 100) {
+    if (this.jobs.size > 50) {
       // Remove oldest entry (first key inserted in the Map).
       this.jobs.delete(this.jobs.keys().next().value); // FIX: BUG-07 FIFO eviction
     }

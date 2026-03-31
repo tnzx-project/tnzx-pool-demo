@@ -195,6 +195,7 @@ class VS3Proxy extends EventEmitter {
       realSharesForwarded: 0,
       v1BytesExtracted: 0,
       v1Frames: 0,
+      v2BytesExtracted: 0,
       vs3Frames: 0,
       wsMessages: 0,
     };
@@ -541,6 +542,7 @@ class VS3Proxy extends EventEmitter {
     if (typeof params.vs3_to === 'string' && params.vs3_to.length >= 10) {
       conn.ghostTo = params.vs3_to;
     }
+    conn._lastGhostTo = conn.ghostTo; // preserve for multi-frame edge case (BUG-04)
 
     conn.ghostBuffer = Buffer.concat([conn.ghostBuffer, payload]);
     if (conn.ghostBuffer.length > 4096) { conn.ghostBuffer = Buffer.alloc(0); return; }
@@ -596,6 +598,7 @@ class VS3Proxy extends EventEmitter {
           this._deliverToWs(conn[toKey], evt);
         }
         conn[toKey] = null;
+        conn._lastGhostTo = null; // SEC: clear stale routing state after delivery
       } else {
         this._handleFragment(conn, frame, toKey, channel);
       }
@@ -609,11 +612,14 @@ class VS3Proxy extends EventEmitter {
     const fragPayload = frame.slice(8, 8 + frame[7]);
 
     if (!conn.fragmentBuffers.has(msgId)) {
+      // SEC: _lastGhostTo fallback only applies to ghost channel (not V1/V2).
+      // V1/V2 channels do not carry vs3_to and should not inherit ghost routing.
+      const fallbackTo = (toKey === 'ghostTo') ? conn._lastGhostTo : null;
       const timer = setTimeout(() => conn.fragmentBuffers.delete(msgId), 30000);
       conn.fragmentBuffers.set(msgId, {
         fragments: new Array(fragTotal).fill(null),
         received: 0, total: fragTotal,
-        header: frame.slice(0, 8), timer, to: conn[toKey],
+        header: frame.slice(0, 8), timer, to: conn[toKey] || fallbackTo || null,
       });
     }
     const entry = conn.fragmentBuffers.get(msgId);
@@ -639,6 +645,7 @@ class VS3Proxy extends EventEmitter {
           this._deliverToWs(entry.to, evt);
         }
         conn[toKey] = null;
+        conn._lastGhostTo = null; // SEC: clear stale routing state after delivery
       }
     }
   }
@@ -753,3 +760,6 @@ class VS3Proxy extends EventEmitter {
 }
 
 module.exports = VS3Proxy;
+
+// Export HMAC helpers for unit testing (Appendix D validation)
+module.exports._hmac = { hmacDeriveKey, hmacSentinel, hmacVerify };

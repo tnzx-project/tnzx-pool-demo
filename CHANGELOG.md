@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.4.1] — 2026-03-31
+
+### Fixed
+- **BUG-04 (CRITICAL):** Multi-fragment messages now route to the correct recipient
+  instead of broadcasting. `stratum-demo.js` used a local variable (`shareGhostTo`)
+  that was null on non-first shares; replaced with persistent `miner.ghostTo`.
+  `vs3-proxy.js` added `_lastGhostTo` fallback for edge case where single-fragment
+  delivery clears `ghostTo` before multi-fragment entry is created.
+- **SEC:** `_lastGhostTo` now cleared after every delivery to prevent stale routing
+  state from misdirecting subsequent messages to previous recipients.
+- **SEC:** `_lastGhostTo` fallback restricted to ghost channel only — V1/V2 channels
+  no longer inherit ghost share routing targets.
+- **BUG-07:** Job Map FIFO eviction cap reduced from 100 to 50 entries to limit
+  memory growth on long-running deployments.
+- Stale comment at `stratum-demo.js:543` corrected (referenced `shareGhostTo`
+  but code uses `miner.ghostTo`).
+
+### Added
+- `poc/test-hmac-sentinel.js` — 18 unit tests validating HMAC rotating sentinel
+  (Appendix D): key derivation, verification, DPI resistance (78+ unique sentinel
+  values per 100 samples), cross-miner isolation.
+- `v2BytesExtracted` counter initialized in proxy stats.
+- HMAC helper functions exported for unit testing (`module.exports._hmac`).
+
+### Verified
+- Security audit: no confidentiality violations after fixes
+- Code review: all fix paths traced for single-fragment, multi-fragment,
+  sequential messages, and interleaved fragments
+- Reference implementation: 37/37 tests pass
+- Proxy mock test: all checks pass, zero ghost share leakage
+- HMAC sentinel: 18/18 tests pass
+
 ## [1.4.0] — 2026-03-30
 
 ### Added
