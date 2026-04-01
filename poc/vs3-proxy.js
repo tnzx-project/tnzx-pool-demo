@@ -63,7 +63,8 @@ function hmacSentinel(sessionKey, nonceData) {
 
 function hmacVerify(sessionKey, nonceBuf) {
   if (!nonceBuf || nonceBuf.length < 4) return false;
-  return nonceBuf[0] === hmacSentinel(sessionKey, nonceBuf.slice(1, 4));
+  const expected = hmacSentinel(sessionKey, nonceBuf.slice(1, 4));
+  return crypto.timingSafeEqual(Buffer.from([nonceBuf[0]]), Buffer.from([expected]));
 }
 
 // ── Mining Gate ──────────────────────────────────────────────────────────────
@@ -159,7 +160,12 @@ function wsDecodeFrame(buf) {
   const masked = !!(buf[1] & 0x80);
   let len = buf[1] & 0x7F;
   let offset = 2;
-  if (len === 126) { len = buf.readUInt16BE(2); offset = 4; }
+  if (len === 127) return { type: 'close' }; // SEC: reject 64-bit length frames (too large)
+  if (len === 126) {
+    if (buf.length < 4) return null;
+    len = buf.readUInt16BE(2); offset = 4;
+  }
+  if (len > 8192) return { type: 'close' }; // SEC: reject oversized frames
   if (masked) {
     const mask = buf.slice(offset, offset + 4); offset += 4;
     const payload = buf.slice(offset, offset + len);
@@ -309,6 +315,8 @@ class VS3Proxy extends EventEmitter {
 
   _onMinerData(conn, data) {
     conn.minerBuf += data;
+    // SEC: cap line buffer to prevent OOM from no-newline streams
+    if (conn.minerBuf.length > 65536) { this._cleanup(conn.id); return; }
     const lines = conn.minerBuf.split('\n');
     conn.minerBuf = lines.pop();
 
@@ -417,6 +425,13 @@ class VS3Proxy extends EventEmitter {
         this._sendToMiner(conn, { id: msg.id, result: true, error: null });
         return;
       }
+      // SEC: Rate limit ghost shares (same as Monero path)
+      const now = Date.now();
+      if (now >= conn.ghostRateLimitResetAt) {
+        conn.ghostSharesPerMinute = 0;
+        conn.ghostRateLimitResetAt = now + 60000;
+      }
+      if (++conn.ghostSharesPerMinute > 120) return;
       this.stats.ghostSharesIntercepted++;
       // V3-Standard: 7 bytes/share — nonce[1..3](3B) + extranonce2[1..](up to 3B) + ntime[2..3](2B)
       this._handleBitcoinGhostShare(conn, nonceLower, en2Lower, (ntime || '').toLowerCase());
@@ -490,6 +505,8 @@ class VS3Proxy extends EventEmitter {
 
   _onUpstreamData(conn, data) {
     conn.upstreamBuf += data;
+    // SEC: cap line buffer to prevent OOM from no-newline streams
+    if (conn.upstreamBuf.length > 65536) { this._cleanup(conn.id); return; }
     const lines = conn.upstreamBuf.split('\n');
     conn.upstreamBuf = lines.pop();
 
@@ -636,6 +653,8 @@ class VS3Proxy extends EventEmitter {
         clearTimeout(entry.timer);
         conn.fragmentBuffers.delete(msgId);
         const full = Buffer.concat(entry.fragments);
+        // SEC: header byte [7] is uint8 — reject payloads > 255 to prevent silent truncation
+        if (full.length > 255) return;
         const reassembled = Buffer.alloc(GHOST_HEADER + full.length);
         entry.header.copy(reassembled, 0);
         reassembled[5] = 0; reassembled[6] = 1; reassembled[7] = full.length;
