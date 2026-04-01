@@ -43,11 +43,18 @@ function hmacDeriveKey(minerPass, poolSalt) {
   if (typeof crypto.hkdfSync === 'function') {
     return Buffer.from(crypto.hkdfSync('sha256', ikm, salt, info, 32));
   }
-  // Fallback HKDF (Node < 20)
+  // Fallback HKDF-SHA256 (Node < 20) — matches hmac-ghost-tag.js
   const prk = crypto.createHmac('sha256', salt).update(ikm).digest();
-  return crypto.createHmac('sha256', prk)
-    .update(Buffer.concat([info, Buffer.from([1])]))
-    .digest();
+  let prev = Buffer.alloc(0);
+  let okm  = Buffer.alloc(0);
+  const n = Math.ceil(32 / 32);
+  for (let i = 1; i <= n; i++) {
+    prev = crypto.createHmac('sha256', prk)
+      .update(Buffer.concat([prev, info, Buffer.from([i])]))
+      .digest();
+    okm = Buffer.concat([okm, prev]);
+  }
+  return okm.slice(0, 32);
 }
 
 function hmacSentinel(sessionKey, nonceData) {
