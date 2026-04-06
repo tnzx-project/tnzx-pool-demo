@@ -647,6 +647,11 @@ class VS3Proxy extends EventEmitter {
       });
     }
     const entry = conn.fragmentBuffers.get(msgId);
+    // FIX: M-3 — validate fragTotal matches existing entry (mirrors stratum-demo fix)
+    if (entry && entry.total !== fragTotal) {
+      console.warn(`[VS3] fragment_total mismatch for message_id=0x${msgId.toString(16)}: expected ${entry.total}, got ${fragTotal} — discarded`);
+      return;
+    }
     if (entry && entry.fragments[fragIndex] === null) {
       entry.fragments[fragIndex] = fragPayload;
       if (++entry.received === entry.total) {
@@ -659,8 +664,8 @@ class VS3Proxy extends EventEmitter {
         entry.header.copy(reassembled, 0);
         reassembled[5] = 0; reassembled[6] = 1; reassembled[7] = full.length;
         full.copy(reassembled, GHOST_HEADER);
-        if (channel === 'v1') this.stats.v1Frames++;
-        else this.stats.vs3Frames++;
+        // Note: per-fragment stats are already counted in _parseFrames when
+        // the frame is consumed from the buffer. Do not double-count here.
         const evt = {
           from: conn.wallet, to: entry.to, frame: reassembled, channel,
           text: full.toString('utf8'), connId: conn.id,
