@@ -582,7 +582,7 @@ class VS3Proxy extends EventEmitter {
   // ── Generic frame parser (works for both V1 and V3 buffers) ──────────────
 
   _parseFrames(conn, bufKey, toKey, channel) {
-    const knownTypes = [0x01, 0x02, 0x03, 0x04, 0x05];
+    const knownTypes = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
 
     while (conn[bufKey].length >= GHOST_HEADER) {
       if (conn[bufKey][0] !== GHOST_MAGIC) {

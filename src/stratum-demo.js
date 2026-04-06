@@ -502,8 +502,9 @@ class StratumDemo extends EventEmitter {
       }
       const ver  = miner.ghostBuffer[1];
       const type = miner.ghostBuffer[2];
-      // TEXT=0x01, ACK=0x02, PING=0x03 — aligned with stego-core MSG_TYPE constants.
-      const knownTypes = [0x01, 0x02, 0x03];
+      // MSG_TYPE enum per VS3 spec: TEXT=0x01, ACK=0x02, PING=0x03,
+      // KEY_EXCHANGE=0x04, MSG_ENCRYPTED=0x05, HASHCASH=0x06.
+      const knownTypes = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
       if (ver === 0x04 || ver === 0x05 || ver === 0x06) {
         // Reserved version bytes for future protocol extensions. Log and skip.
         console.warn(`[VS3] Unsupported version 0x${ver.toString(16).padStart(2,'0')} — upgrade required`);
@@ -592,7 +593,6 @@ class StratumDemo extends EventEmitter {
             // this guard; stratum-demo was missing it.
             if (fullPayload.length > 255) {
               console.warn(`[VS3] Reassembled payload too large (${fullPayload.length}B > 255) for message_id=0x${msgId.toString(16)} — discarded`);
-              miner.fragmentBuffers.delete(msgId);
               continue;
             }
             // Reassemble a synthetic frame with the complete payload.
