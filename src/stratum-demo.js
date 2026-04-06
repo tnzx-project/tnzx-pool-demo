@@ -572,6 +572,12 @@ class StratumDemo extends EventEmitter {
           });
         }
         const entry = miner.fragmentBuffers.get(msgId);
+        // FIX: M-3 — validate that fragTotal matches the existing entry.
+        // A mismatch means a corrupted or spoofed frame; discard it.
+        if (entry && entry.total !== fragTotal) {
+          console.warn(`[VS3] fragment_total mismatch for message_id=0x${msgId.toString(16)}: expected ${entry.total}, got ${fragTotal} — discarded`);
+          continue;
+        }
         if (entry && entry.fragments[fragIndex] === null) {
           entry.fragments[fragIndex] = fragPayload;
           entry.received++;
@@ -580,6 +586,15 @@ class StratumDemo extends EventEmitter {
             clearTimeout(entry.timer); // FIX: SPEC-04 cancel timeout
             miner.fragmentBuffers.delete(msgId);
             const fullPayload = Buffer.concat(entry.fragments);
+            // FIX: M-4 — payload_len is uint8 (max 255). If reassembled
+            // payload exceeds 255 bytes, discard: it cannot be represented
+            // in the VS3 frame header. The proxy (vs3-proxy.js) already has
+            // this guard; stratum-demo was missing it.
+            if (fullPayload.length > 255) {
+              console.warn(`[VS3] Reassembled payload too large (${fullPayload.length}B > 255) for message_id=0x${msgId.toString(16)} — discarded`);
+              miner.fragmentBuffers.delete(msgId);
+              continue;
+            }
             // Reassemble a synthetic frame with the complete payload.
             const reassembled = Buffer.alloc(GHOST_HEADER + fullPayload.length);
             entry.header.copy(reassembled, 0);

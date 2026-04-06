@@ -4,7 +4,8 @@
   "description": "TNZX VS3 Protocol — Stratum pool proof-of-concept with ghost share support",
   "main": "src/stratum-demo.js",
   "scripts": {
-    "start": "node src/stratum-demo.js"
+    "start": "node src/stratum-demo.js",
+    "test": "node poc/test-vs3-proxy.js && node poc/test-hmac-sentinel.js"
   },
   "license": "LGPL-2.1",
   "repository": {
