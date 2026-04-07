@@ -138,7 +138,7 @@
  *    Share 3 nonce/ntime → bytes [6C 6C 6F -- --]  (last 3, two slots unused)
  *
  * Note: this demo logs VS3 frame payloads to stdout for readability.
- * Encryption (X25519 + AES-256-GCM, HKDF-SHA256) is a separate layer
+ * Encryption (X25519 + XChaCha20-Poly1305, HKDF-SHA256) is a separate layer
  * not included here — the transport is intentionally kept minimal so the
  * steganographic mechanism can be audited without cryptographic tooling.
  *
@@ -745,7 +745,7 @@ function startAPI(stratum) {
 // payload as UTF-8 text and log it, demonstrating end-to-end delivery.
 //
 // In a full implementation the handler would pass the frame to an encryption
-// layer (X25519 key agreement + AES-256-GCM, HKDF-SHA256) before presenting
+// layer (X25519 key agreement + XChaCha20-Poly1305, HKDF-SHA256) before presenting
 // the plaintext to the user interface.
 //
 const stratum = new StratumDemo();

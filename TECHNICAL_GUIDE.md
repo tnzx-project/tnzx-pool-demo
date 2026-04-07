@@ -83,7 +83,7 @@ node test-ghost.js 127.0.0.1 4444
 
 ## Limitations
 
-- **No encryption.** Frames travel in plaintext. Production uses X25519 + AES-256-GCM.
+- **No encryption.** Frames travel in plaintext. Production uses X25519 + XChaCha20-Poly1305.
 - **No TLS.** Demo uses plaintext TCP for readability.
 - **No Mining Gate.** The pool demo does not enforce PoW gating (the proxy does).
 - **The 0xAA sentinel is detectable** given enough traffic. A hardened version would use a session-negotiated marker.

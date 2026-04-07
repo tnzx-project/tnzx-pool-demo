@@ -151,7 +151,7 @@ The long hex strings (`4111...`, `4222...`) are demo wallet addresses. In this d
 
 | Feature | Where to find it |
 |---------|-----------------|
-| End-to-end encryption (X25519 + AES-256-GCM) | [tnzx-protocol/reference-impl](https://github.com/tnzx-project/tnzx-protocol) |
+| End-to-end encryption (X25519 + XChaCha20-Poly1305) | [tnzx-protocol/reference-impl](https://github.com/tnzx-project/tnzx-protocol) |
 | Mining Gate (hashrate-gated access control) | [tnzx-protocol/reference-impl](https://github.com/tnzx-project/tnzx-protocol) |
 | VS3-Generic profile (Bitcoin/Ethereum Stratum) | Planned — milestone M2 |
 | Anonymous group coordination (Falo) | [tnzx-protocol/papers/falo](https://github.com/tnzx-project/tnzx-protocol/tree/main/papers/falo) |
