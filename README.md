@@ -1,5 +1,7 @@
 # TNZX VS3 — Pool Demo and Proxy POC
 
+> **Security notice:** This is a research proof-of-concept. It has not undergone an independent security audit. Do not deploy in environments where communication security is critical to personal safety without independent verification. Messages are not encrypted at this layer (see [tnzx-protocol](https://github.com/tnzx-project/tnzx-protocol) for E2E encryption).
+
 Proof-of-concept implementations of the [Visual Stratum protocol](https://github.com/tnzx-project/tnzx-protocol). Two deployment models demonstrated:
 
 1. **VS3 Proxy** (`poc/`) — sits between any miner and any standard pool. Extracts steganographic data from real shares, intercepts ghost shares, routes messages. The pool is unmodified.
@@ -93,22 +95,39 @@ V1 and V2 are truly steganographic — the shares pass full PoW validation. V3 i
 ## Repository Structure
 
 ```
-src/stratum-demo.js     VS3-aware Stratum pool (~730 lines)
-vs3-client.js           VS3 ghost share client
-test-ghost.js           Upload path test
+src/stratum-demo.js       VS3-aware Stratum pool (~730 lines)
+vs3-client.js             VS3 ghost share client (plaintext)
+vs3-chat.js               E2E encrypted chat client (X25519 + XChaCha20)
+demo-server.js            Full demo: proxy → real pool + browser UI
+demo-ui.html              Browser interface for the demo
+test-ghost.js             Upload path test
+lib/
+  e2e.js                  E2E encryption (X25519 ECDH + XChaCha20-Poly1305)
+  xchacha20.js            XChaCha20-Poly1305 (vendored from tnzx-protocol ref-impl)
+  vs3-frame.js            Shared frame encoding utilities
 poc/
-  vs3-proxy.js          VS3 middleware proxy (~700 lines)
-  run-v1-proof.js       V1 proof on real Monero pool
-  run-v2-proof.js       V2 proof on real Bitcoin pool
+  vs3-proxy.js            VS3 middleware proxy (~830 lines)
+  test-vs3-proxy.js       Proxy interception test
+  test-hmac-sentinel.js   HMAC rotating sentinel test (Appendix D)
+  test-dpi-steganalysis.js  Chi-squared DPI indistinguishability test
+  run-v1-proof.js         V1 proof on real Monero pool
+  run-v2-proof.js         V2 proof on real Bitcoin pool
   run-alice-bob-proof.js  Bidirectional messaging proof
-  results/              Timestamped transcripts
-  README.md             Proxy documentation
-TECHNICAL_GUIDE.md      Pool demo code walkthrough
+  results/                Timestamped transcripts
+proxy/
+  index.js                Standalone proxy package entry point
+  bin/vs3-proxy-cli.js    CLI for deploying the proxy
+examples/                 Quick-start guide and usage examples
+TECHNICAL_GUIDE.md        Pool demo code walkthrough
 ```
 
 ## Protocol Specification
 
+Full specification, design paper, reference implementation (client-side crypto + stego encoder), and test vectors:
+
 [tnzx-project/tnzx-protocol](https://github.com/tnzx-project/tnzx-protocol)
+
+This pool demo implements the *pool-side* of the protocol. The reference implementation in `tnzx-protocol` implements the *client-side* (E2E encryption, steganographic encoding, Mining Gate verification). Together they form a complete VS3 stack.
 
 ## License
 

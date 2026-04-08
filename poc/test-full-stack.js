@@ -38,8 +38,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function buildVS3Frame(text) {
   const payload = Buffer.from(text, 'utf8').slice(0, 247);
+  const msgId = crypto.randomBytes(2).readUInt16BE(0);
   return Buffer.concat([
-    Buffer.from([0xAA, 0x03, 0x01, 0x00, 0x01, 0x00, 0x01, payload.length]),
+    Buffer.from([0xAA, 0x03, 0x01, (msgId >> 8) & 0xFF, msgId & 0xFF, 0x00, 0x01, payload.length]),
     payload,
   ]);
 }

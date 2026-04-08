@@ -8,6 +8,15 @@
  *   3. The VS3 proxy extracts and assembles the hidden message correctly
  *   4. The upstream pool has NO VS3 code, NO modifications, NO awareness
  *
+ * What this test does NOT prove:
+ *   - Concurrent multi-miner frame assembly (single connection only)
+ *   - Lost/reordered ghost shares mid-transmission
+ *   - Proxy behavior under real network latency or packet fragmentation
+ *   - PoW validation of real shares (mock pool accepts all shares)
+ *   - HMAC sentinel mode (tested in test-hmac-sentinel.js, this uses legacy 0xAA)
+ *   - Multi-fragment messages (test message fits in a single VS3 frame)
+ *   - WebSocket relay path (tested only in test-full-stack.js against real pools)
+ *
  * Run: node poc/test-vs3-proxy.js
  *
  * @license LGPL-2.1
@@ -108,8 +117,10 @@ class MockPool {
 
 function buildVS3Frame(text) {
   const payload = Buffer.from(text, 'utf8').slice(0, 247);
+  // Generate random 16-bit message_id (matches ref-impl generateMessageId behavior)
+  const msgId = Math.floor(Math.random() * 0xFFFF);
   return Buffer.concat([
-    Buffer.from([0xAA, 0x03, 0x01, 0x00, 0x01, 0x00, 0x01, payload.length]),
+    Buffer.from([0xAA, 0x03, 0x01, (msgId >> 8) & 0xFF, msgId & 0xFF, 0x00, 0x01, payload.length]),
     payload,
   ]);
 }
@@ -167,6 +178,7 @@ async function run() {
     listenPort: PROXY_PORT,
     upstreamHost: '127.0.0.1',
     upstreamPort: MOCK_POOL_PORT,
+    hmacSalt: false, // legacy 0xAA mode for this test (HMAC tested in test-hmac-sentinel.js)
   });
 
   let assembledMessage = null;

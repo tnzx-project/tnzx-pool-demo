@@ -2,13 +2,24 @@
 /**
  * test-hmac-sentinel.js — Unit test for HMAC Rotating Sentinel (Appendix D)
  *
- * Validates that:
- * 1. hmacDeriveKey produces a deterministic 32-byte key
- * 2. hmacSentinel produces a valid single-byte tag from session key + nonce data
- * 3. hmacVerify correctly detects HMAC-tagged ghost shares
- * 4. hmacVerify rejects non-HMAC shares (false positive rate ~1/256)
- * 5. Generated sentinel bytes are diverse (not fixed 0xAA)
- * 6. None of the generated sentinels equal 0xAA (probabilistic, verified over 100 samples)
+ * What this test proves:
+ *   1. hmacDeriveKey produces a deterministic 32-byte key from (password, salt)
+ *   2. hmacSentinel produces a valid single-byte tag from session key + nonce data
+ *   3. hmacVerify correctly detects HMAC-tagged ghost shares
+ *   4. hmacVerify rejects tampered, wrong-key, short, and null nonces
+ *   5. Generated sentinel bytes are diverse (not fixed 0xAA) — DPI resistance
+ *   6. Cross-miner isolation: Alice and Bob cannot forge each other's sentinels
+ *
+ * What this test does NOT prove:
+ *   - Integration with the proxy: these are unit tests on exported functions,
+ *     not end-to-end tests through the VS3Proxy class with HMAC enabled.
+ *   - False positive rate under adversarial input: the 1/256 FP rate is
+ *     theoretical. No test generates adversarial nonces designed to collide.
+ *   - HKDF correctness against known test vectors (trusts Node.js crypto).
+ *   - Timing safety of hmacVerify under adversarial observation (uses
+ *     crypto.timingSafeEqual, but no timing measurement in this test).
+ *   - Key rotation: no test for what happens when the pool salt changes
+ *     mid-session or when miners reconnect with a new session key.
  *
  * @license LGPL-2.1
  */

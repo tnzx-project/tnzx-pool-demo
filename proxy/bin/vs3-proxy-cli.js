@@ -160,7 +160,10 @@ const proxy = new VS3Proxy({
   upstreamHost: upstream.host,
   upstreamPort: upstream.port,
   wsPort: args.ws,
-  hmacEnabled: args.hmac
+  // hmacSalt: false = legacy 0xAA mode (default for CLI)
+  // hmacSalt: string = use that salt for HMAC derivation
+  // hmacSalt: undefined = auto-generate (programmatic default)
+  hmacSalt: args.hmac ? undefined : false,
 });
 
 // ── Event logging ──

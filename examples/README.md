@@ -1,6 +1,6 @@
-﻿# Examples
+# Examples
 
-Two demo scenarios: one-way message delivery and bidirectional chat.
+End-to-end encrypted chat hidden in mining traffic.
 
 All commands are run from the **project root** (`tnzx-pool-demo/`), not from this directory.
 
@@ -17,7 +17,7 @@ cd tnzx-pool-demo
 
 ---
 
-## Scenario 1 — Alice sends a message to Bob
+## Encrypted Chat — Alice and Bob
 
 Open **three terminal windows**, all in the project root.
 
@@ -25,113 +25,55 @@ Open **three terminal windows**, all in the project root.
 ```
 node src/stratum-demo.js
 ```
-Expected:
-```
-[VS3-Demo] Stratum listening on :4444
-[VS3-Demo] Stats API on :8090/stats
-```
-Leave running.
-
-**Terminal 2 — Bob listens**
-
-Windows:
-```
-.\examples\bob.ps1
-```
-Linux / macOS:
-```
-node vs3-client.js listen 4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
-```
-Expected:
-```
-[VS3] Listener → 127.0.0.1:4444
-[VS3] Connected. Waiting for messages...
-```
-Leave running.
-
-**Terminal 3 — Alice sends**
-
-Windows:
-```
-.\examples\alice.ps1
-```
-Linux / macOS:
-```
-node vs3-client.js send \
-  4222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222 \
-  4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 \
-  "Hello Bob! This message is hidden in mining traffic."
-```
-
-**What you should see**
-
-Terminal 1 (pool):
-```
-[VS3-Demo] Miner login: 4111111111111111...
-[VS3-Demo] Miner login: 4222222222222222...
-[VS3] Frame assembled from 422222... → 411111... (60B)
-[VS3] Message: "Hello Bob! This message is hidden in mining traffic."
-```
-
-Terminal 2 (Bob):
-```
-[VS3] ← Message received:
-      "Hello Bob! This message is hidden in mining traffic."
-      (frame: 60B, version: 0x03, type: 0x01)
-```
-
-Terminal 3 (Alice):
-```
-[VS3] Frame: 60B → 12 ghost shares
-      Share  1/12 → nonce=aaaa0301
-      ...
-[VS3] All shares sent.
-```
-
-Each nonce starts with `aa` (the 0xAA VS3 sentinel byte). The message payload follows in the subsequent bytes. Encryption is a separate layer not included in this demo — see [tnzx-protocol](https://github.com/tnzx-project/tnzx-protocol) for the full reference implementation.
-
----
-
-## Scenario 2 — Bidirectional chat
-
-Open three terminals in the project root.
-
-**Terminal 1 — pool**
-```
-node src/stratum-demo.js
-```
 
 **Terminal 2 — Bob**
-
-Windows:
 ```
-.\examples\bob-chat.ps1
-```
-Linux / macOS:
-```
-node vs3-client.js chat \
-  4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 \
-  4222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
+node vs3-chat.js 4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 4222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222
 ```
 
 **Terminal 3 — Alice**
-
-Windows:
 ```
-.\examples\alice-chat.ps1
-```
-Linux / macOS:
-```
-node vs3-client.js chat \
-  4222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222 \
-  4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+node vs3-chat.js 4222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222 4111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
 ```
 
-Type a message in either terminal and press Enter. The other side receives it within a second or two depending on share submission rate.
+Wait for both sides to show `E2E encryption active`, then type a message in either terminal.
+
+**What you should see**
+
+Terminal 3 (Alice types "Hello Bob"):
+```
+  [send] 9B text + 104B crypto overhead = 113B → 25 ghost shares
+```
+
+Terminal 2 (Bob receives):
+```
+  16:55:36 [peer] Hello Bob
+```
+
+Terminal 1 (pool log):
+```
+  [VS3] Frame assembled from 422222... → 411111... (122B)
+  [VS3] Message: "9Tq█▓░...░▓█" | type=0x05
+```
+
+The pool sees only opaque ciphertext (type 0x05 = ENCRYPTED). It cannot read the message content.
 
 ---
 
-## Quick upload test (no recipient needed)
+## What happens under the hood
+
+1. Each client generates a fresh **X25519 keypair** at startup
+2. Clients exchange public keys via **KEY_EXCHANGE** ghost shares (type 0x04)
+3. Each message is encrypted with **XChaCha20-Poly1305** using a fresh ephemeral key (PFS)
+4. The encrypted payload is split into **5-byte ghost shares** hidden in Stratum nonce/ntime fields
+5. The pool assembles the frame and routes it to the recipient via a job notification
+6. The recipient decrypts using their persistent private key
+
+Every message uses a new ephemeral keypair. Compromising one message does not compromise past or future messages (Perfect Forward Secrecy).
+
+---
+
+## Quick upload test (no encryption, no recipient)
 
 ```
 node test-ghost.js 127.0.0.1 4444
@@ -141,17 +83,16 @@ The pool will log the assembled frame. Useful for testing the encoding path in i
 
 ---
 
-## Address format
+## Plaintext chat (legacy, no encryption)
 
-The long hex strings (`4111...`, `4222...`) are demo wallet addresses. In this demo they serve as sender and recipient identifiers. In a real VS3 deployment these would be the actual Monero wallet addresses used by the mining clients.
+For testing the transport layer without encryption:
+
+```
+node vs3-client.js chat <myWallet> <peerWallet>
+```
 
 ---
 
-## What is not included in this demo
+## Address format
 
-| Feature | Where to find it |
-|---------|-----------------|
-| End-to-end encryption (X25519 + XChaCha20-Poly1305) | [tnzx-protocol/reference-impl](https://github.com/tnzx-project/tnzx-protocol) |
-| Mining Gate (hashrate-gated access control) | [tnzx-protocol/reference-impl](https://github.com/tnzx-project/tnzx-protocol) |
-| VS3-Generic profile (Bitcoin/Ethereum Stratum) | Planned — milestone M2 |
-| Anonymous group coordination (Falo) | [tnzx-protocol/papers/falo](https://github.com/tnzx-project/tnzx-protocol/tree/main/papers/falo) |
+The long hex strings (`4111...`, `4222...`) are demo wallet addresses. In a real VS3 deployment these would be actual Monero wallet addresses used by the mining clients.

@@ -32,29 +32,31 @@ const WS_GUID      = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
 // ── HMAC Ghost Tag (Appendix D) ─────────────────────────────────────────────
 // Replaces fixed 0xAA sentinel with HMAC-derived per-share tag.
-// Key: HKDF-SHA256(miner_pass, pool_salt, "tnzx-ghost-v1")
+//
+// Key agreement: the proxy generates a random session token per connection
+// and sends it in the login response (result.extensions.vs3_session).
+// Both sides derive the session key via HKDF:
+//   sessionKey = HKDF-SHA256(session_token, wallet, "tnzx-ghost-v1")
+//
+// The session token travels once (login response) over the TCP connection.
+// In production, this connection should use TLS.
+//
 // Tag: HMAC-SHA256(session_key, nonce[1..3])[0]
 // False positive rate: 1/256, resolved by frame header validation.
 
+function hmacDeriveSessionKey(sessionToken, wallet) {
+  const ikm  = Buffer.isBuffer(sessionToken) ? sessionToken : Buffer.from(sessionToken, 'hex');
+  const salt = Buffer.from(wallet, 'utf8');
+  const info = Buffer.from('tnzx-ghost-v1', 'utf8');
+  return Buffer.from(crypto.hkdfSync('sha256', ikm, salt, info, 32));
+}
+
+// Legacy: derive from password + pool salt (for backward compatibility)
 function hmacDeriveKey(minerPass, poolSalt) {
   const ikm  = Buffer.from(minerPass, 'utf8');
   const salt = Buffer.from(poolSalt, 'utf8');
   const info = Buffer.from('tnzx-ghost-v1', 'utf8');
-  if (typeof crypto.hkdfSync === 'function') {
-    return Buffer.from(crypto.hkdfSync('sha256', ikm, salt, info, 32));
-  }
-  // Fallback HKDF-SHA256 (Node < 20) — matches hmac-ghost-tag.js
-  const prk = crypto.createHmac('sha256', salt).update(ikm).digest();
-  let prev = Buffer.alloc(0);
-  let okm  = Buffer.alloc(0);
-  const n = Math.ceil(32 / 32);
-  for (let i = 1; i <= n; i++) {
-    prev = crypto.createHmac('sha256', prk)
-      .update(Buffer.concat([prev, info, Buffer.from([i])]))
-      .digest();
-    okm = Buffer.concat([okm, prev]);
-  }
-  return okm.slice(0, 32);
+  return Buffer.from(crypto.hkdfSync('sha256', ikm, salt, info, 32));
 }
 
 function hmacSentinel(sessionKey, nonceData) {
@@ -90,9 +92,6 @@ class MiningGate {
   recordShare(difficulty = 1) {
     const now = Date.now();
     this.recentShares.push({ timestamp: now, difficulty });
-    // Prune old shares
-    const cutoff = now - this.windowMs;
-    this.recentShares = this.recentShares.filter(s => s.timestamp > cutoff);
 
     if (this.state === GATE_INACTIVE) {
       this.state = GATE_GRACE;
@@ -115,13 +114,27 @@ class MiningGate {
     }
   }
 
-  getHashrate() {
-    const cutoff = Date.now() - this.windowMs;
+  /**
+   * Get hashrate over a time window (matches ref-impl MinerState.getHashrate)
+   * @param {number} [windowMs] - Window in ms (defaults to this.windowMs)
+   */
+  getHashrate(windowMs) {
+    const w = windowMs || this.windowMs;
+    const cutoff = Date.now() - w;
     const recent = this.recentShares.filter(s => s.timestamp > cutoff);
     if (recent.length < 2) return recent.length > 0 ? recent[0].difficulty : 0;
     const totalDiff = recent.reduce((sum, s) => sum + s.difficulty, 0);
     const elapsed = Math.max(recent[recent.length - 1].timestamp - recent[0].timestamp, 1000);
     return Math.floor(totalDiff / (elapsed / 1000));
+  }
+
+  /**
+   * Explicitly prune old shares (matches ref-impl MinerState.pruneShares)
+   * @param {number} [windowMs] - Window in ms (defaults to this.windowMs)
+   */
+  pruneShares(windowMs) {
+    const cutoff = Date.now() - (windowMs || this.windowMs);
+    this.recentShares = this.recentShares.filter(s => s.timestamp > cutoff);
   }
 
   isOpen() { return this.state === GATE_ACTIVE; }
@@ -155,24 +168,41 @@ function wsEncodeText(text) {
 function wsDecodeFrame(buf) {
   if (buf.length < 2) return null;
   const opcode = buf[0] & 0x0F;
-  if (opcode === 0x08) return { type: 'close' };
-  if (opcode === 0x09) return { type: 'ping' };
+
+  // RFC 6455 Section 5.2 — explicit opcode dispatch
+  switch (opcode) {
+    case 0x08: return { type: 'close', totalLen: buf.length };
+    case 0x09: return { type: 'ping', totalLen: buf.length };
+    case 0x0A: return { type: 'pong', totalLen: buf.length };
+    case 0x00: // continuation — treat as data (coalesce with prior frame)
+    case 0x01: // text
+    case 0x02: // binary — decode payload, caller handles text vs binary
+      break;
+    default:
+      // Unknown/reserved opcode — close per RFC 6455 Section 7.4.1
+      return { type: 'close', totalLen: buf.length };
+  }
+
   const masked = !!(buf[1] & 0x80);
   let len = buf[1] & 0x7F;
   let offset = 2;
-  if (len === 127) return { type: 'close' }; // SEC: reject 64-bit length frames (too large)
+  if (len === 127) return { type: 'close', totalLen: buf.length }; // SEC: reject 64-bit length frames (too large)
   if (len === 126) {
     if (buf.length < 4) return null;
     len = buf.readUInt16BE(2); offset = 4;
   }
-  if (len > 8192) return { type: 'close' }; // SEC: reject oversized frames
+  if (len > 8192) return { type: 'close', totalLen: buf.length }; // SEC: reject oversized frames
   if (masked) {
     const mask = buf.slice(offset, offset + 4); offset += 4;
+    if (buf.length < offset + len) return null; // incomplete frame
     const payload = buf.slice(offset, offset + len);
     for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
-    return { type: 'text', data: payload.toString('utf8'), totalLen: offset + len };
+    const frameType = opcode === 0x02 ? 'binary' : 'text';
+    return { type: frameType, data: payload.toString('utf8'), totalLen: offset + len };
   }
-  return { type: 'text', data: buf.slice(offset, offset + len).toString('utf8'), totalLen: offset + len };
+  if (buf.length < offset + len) return null; // incomplete frame
+  const frameType = opcode === 0x02 ? 'binary' : 'text';
+  return { type: frameType, data: buf.slice(offset, offset + len).toString('utf8'), totalLen: offset + len };
 }
 
 // ── V1 extraction helper ─────────────────────────────────────────────────────
@@ -196,7 +226,16 @@ class VS3Proxy extends EventEmitter {
     this.upstreamHost = opts.upstreamHost || '127.0.0.1';
     this.upstreamPort = opts.upstreamPort || 3333;
     this.gateOpts     = opts.gate         || {};
-    this.hmacSalt     = opts.hmacSalt    || null; // null = legacy 0xAA mode
+    // HMAC sentinel mode (Appendix D):
+    //   hmacSalt: false → legacy 0xAA mode (no HMAC, sentinel is fixed byte)
+    //   hmacSalt: undefined/true → session-token mode (default, per-connection ECDH-like)
+    // In session-token mode, the proxy generates a random token per connection,
+    // sends it in the login response, and both sides derive the HMAC key from it.
+    this.legacyMode = opts.hmacSalt === false;
+    // Global rate limiting: per-IP ghost share counter (prevents multi-connection bypass)
+    this.ghostRateByIp = new Map(); // IP → { count, resetAt }
+    this.ghostRateLimit = opts.ghostRateLimit || 120; // max ghost shares per minute per IP
+    this._rateLimitCleanup = null;
     this.server       = null;
     this.wsServer     = null;
     this.connections  = new Map();
@@ -214,7 +253,30 @@ class VS3Proxy extends EventEmitter {
     };
   }
 
+  /**
+   * Check global per-IP ghost share rate limit
+   * @param {string} ip - Remote IP address
+   * @returns {boolean} true if within limit
+   */
+  _checkGhostRate(ip) {
+    const now = Date.now();
+    let entry = this.ghostRateByIp.get(ip);
+    if (!entry || now >= entry.resetAt) {
+      entry = { count: 0, resetAt: now + 60000 };
+      this.ghostRateByIp.set(ip, entry);
+    }
+    return ++entry.count <= this.ghostRateLimit;
+  }
+
   async start() {
+    // Periodic cleanup of stale rate limit entries (every 2 minutes)
+    this._rateLimitCleanup = setInterval(() => {
+      const now = Date.now();
+      for (const [ip, entry] of this.ghostRateByIp) {
+        if (now >= entry.resetAt) this.ghostRateByIp.delete(ip);
+      }
+    }, 120000);
+
     // Stratum proxy
     await new Promise((resolve) => {
       this.server = net.createServer((s) => this._onMinerConnect(s));
@@ -240,6 +302,8 @@ class VS3Proxy extends EventEmitter {
     for (const [, ws] of this.wsClients) ws.destroy();
     this.connections.clear();
     this.wsClients.clear();
+    if (this._rateLimitCleanup) clearInterval(this._rateLimitCleanup);
+    this.ghostRateByIp.clear();
     if (this.server) this.server.close();
     if (this.wsServer) this.wsServer.close();
   }
@@ -248,8 +312,10 @@ class VS3Proxy extends EventEmitter {
 
   _onMinerConnect(minerSock) {
     const connId = ++this.connCounter;
+    const remoteIp = minerSock.remoteAddress || 'unknown';
     const conn = {
       id: connId,
+      ip: remoteIp,
       miner: minerSock,
       upstream: null,
       upstreamReady: false,
@@ -262,8 +328,7 @@ class VS3Proxy extends EventEmitter {
       // V3 ghost share state
       ghostBuffer: Buffer.alloc(0),
       ghostTo: null,
-      ghostSharesPerMinute: 0,
-      ghostRateLimitResetAt: 0,
+      // ghostSharesPerMinute removed: rate limiting is now global per-IP (see _checkGhostRate)
       fragmentBuffers: new Map(),
       // V1/V2 steganographic state
       v1Buffer: Buffer.alloc(0),
@@ -282,6 +347,8 @@ class VS3Proxy extends EventEmitter {
       protocol: null, // 'monero' | 'bitcoin'
       extranonce2Size: 4, // bitcoin: size of extranonce2 field
     };
+    // Periodic pruning of old shares (matches ref-impl explicit pruneShares strategy)
+    conn.gateTimer = setInterval(() => conn.gate.pruneShares(), 60000);
     this.connections.set(connId, conn);
 
     const upstream = net.createConnection(this.upstreamPort, this.upstreamHost, () => {
@@ -347,9 +414,9 @@ class VS3Proxy extends EventEmitter {
       if (msg.method === 'login' && msg.params) {
         conn.wallet = msg.params.login;
         if ((msg.params.agent || '').includes('vs3')) conn.v1Active = true;
-        // HMAC key derivation (Appendix D)
-        if (this.hmacSalt && msg.params.pass) {
-          conn.sessionKey = hmacDeriveKey(msg.params.pass, this.hmacSalt);
+        // Generate per-connection session token for HMAC (Appendix D)
+        if (!this.legacyMode) {
+          conn.sessionToken = crypto.randomBytes(32);
         }
         // Sanitize agent string before forwarding to upstream pool
         const sanitized = { ...msg, params: { ...msg.params, agent: 'XMRig/6.21.0' } };
@@ -361,10 +428,11 @@ class VS3Proxy extends EventEmitter {
       if (msg.method === 'mining.authorize' && Array.isArray(msg.params)) {
         conn.wallet = msg.params[0];
         conn.v1Active = true; // V1/V2 always active on Bitcoin
-        // HMAC key derivation (Appendix D)
-        if (this.hmacSalt && msg.params[1]) {
-          conn.sessionKey = hmacDeriveKey(msg.params[1], this.hmacSalt);
+        if (!this.legacyMode) {
+          conn.sessionToken = crypto.randomBytes(32);
         }
+        // Note: Bitcoin auth response is simpler (result: true). Session token
+        // will be delivered on next mining.notify with extensions field.
       }
 
       this._sendToUpstream(conn, line);
@@ -425,13 +493,8 @@ class VS3Proxy extends EventEmitter {
         this._sendToMiner(conn, { id: msg.id, result: true, error: null });
         return;
       }
-      // SEC: Rate limit ghost shares (same as Monero path)
-      const now = Date.now();
-      if (now >= conn.ghostRateLimitResetAt) {
-        conn.ghostSharesPerMinute = 0;
-        conn.ghostRateLimitResetAt = now + 60000;
-      }
-      if (++conn.ghostSharesPerMinute > 120) return;
+      // Global rate limit: per-IP (same as Monero path)
+      if (!this._checkGhostRate(conn.ip)) return;
       this.stats.ghostSharesIntercepted++;
       // V3-Standard: 7 bytes/share — nonce[1..3](3B) + extranonce2[1..](up to 3B) + ntime[2..3](2B)
       this._handleBitcoinGhostShare(conn, nonceLower, en2Lower, (ntime || '').toLowerCase());
@@ -522,6 +585,13 @@ class VS3Proxy extends EventEmitter {
       if (msg.result && msg.result.id && msg.result.job) {
         conn.minerId = msg.result.id;
         conn.lastJob = { method: 'job', params: msg.result.job };
+        // Inject HMAC session token into login response (Appendix D)
+        // The miner reads vs3_session and derives the same session key.
+        if (conn.sessionToken && conn.wallet) {
+          conn.sessionKey = hmacDeriveSessionKey(conn.sessionToken, conn.wallet);
+          if (!msg.result.extensions) msg.result.extensions = {};
+          msg.result.extensions.vs3_session = conn.sessionToken.toString('hex');
+        }
       }
 
       // ── Bitcoin: mining.subscribe response → capture extranonce2_size ──
@@ -552,18 +622,14 @@ class VS3Proxy extends EventEmitter {
   // ── V3 Ghost Shares (5 bytes/share) ──────────────────────────────────────
 
   _handleGhostShare(conn, params) {
-    const now = Date.now();
-    if (now >= conn.ghostRateLimitResetAt) {
-      conn.ghostSharesPerMinute = 0;
-      conn.ghostRateLimitResetAt = now + 60000;
-    }
-    if (++conn.ghostSharesPerMinute > 120) return;
+    // Global rate limit: per-IP, not per-connection (prevents multi-connection bypass)
+    if (!this._checkGhostRate(conn.ip)) return;
 
     const nb = Buffer.from((params.nonce || '').padStart(8, '0'), 'hex');
     const tb = Buffer.from((params.ntime || '').padStart(8, '0'), 'hex');
     const payload = Buffer.concat([nb.slice(1, 4), tb.slice(2, 4)]);
 
-    if (typeof params.vs3_to === 'string' && params.vs3_to.length >= 10) {
+    if (typeof params.vs3_to === 'string' && params.vs3_to.length >= 10 && params.vs3_to.length <= 256) {
       conn.ghostTo = params.vs3_to;
     }
     conn._lastGhostTo = conn.ghostTo; // preserve for multi-frame edge case (BUG-04)
@@ -765,9 +831,17 @@ class VS3Proxy extends EventEmitter {
   _deliverToWs(recipientWallet, evt) {
     const ws = this.wsClients.get(recipientWallet);
     if (ws && !ws.destroyed) {
-      ws.write(wsEncodeText(JSON.stringify({
-        type: 'msg', from: evt.from, text: evt.text, channel: evt.channel || 'ws',
-      })));
+      // Timing decorrelation (paper Section 6.2): random delay on bonus channels
+      // prevents cross-channel correlation between Stratum and WebSocket traffic.
+      // An observer monitoring both channels cannot link them by timing.
+      const delay = 500 + Math.floor(Math.random() * 2500); // 500-3000ms
+      setTimeout(() => {
+        if (!ws.destroyed) {
+          ws.write(wsEncodeText(JSON.stringify({
+            type: 'msg', from: evt.from, text: evt.text, channel: evt.channel || 'ws',
+          })));
+        }
+      }, delay);
     }
   }
 

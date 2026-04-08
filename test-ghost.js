@@ -42,7 +42,7 @@ const FAKE_WALLET = '4' + '1'.repeat(94);
  *   Byte 0:   0xAA  — VS3 magic / start-of-frame marker
  *   Byte 1:   0x03  — protocol version (0x03 = VS3, per stego-core VERSION_V3 constant)
  *   Byte 2:   0x01  — frame type (0x01 = text message, per MSG_TYPE.TEXT)
- *   Bytes 3–4: 0x00, 0x01 — message_id big-endian (first message = 1)
+ *   Bytes 3–4: message_id big-endian (random 16-bit, unique per message)
  *   Byte 5:   0x00  — fragment_index (0-based; 0 for single-fragment messages)
  *   Byte 6:   0x01  — fragment_total (1 = no fragmentation)
  *   Byte 7:   payload.length — byte count N of the payload that follows
@@ -53,8 +53,10 @@ const FAKE_WALLET = '4' + '1'.repeat(94);
  */
 function buildVS3Frame(text) {
   const payload = Buffer.from(text, 'utf8').slice(0, 247);
+  // Generate random 16-bit message_id (matches ref-impl generateMessageId behavior)
+  const msgId = Math.floor(Math.random() * 0xFFFF);
   return Buffer.concat([
-    Buffer.from([0xAA, 0x03, 0x01, 0x00, 0x01, 0x00, 0x01, payload.length]),
+    Buffer.from([0xAA, 0x03, 0x01, (msgId >> 8) & 0xFF, msgId & 0xFF, 0x00, 0x01, payload.length]),
     payload
   ]);
 }

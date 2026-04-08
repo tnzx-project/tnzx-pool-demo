@@ -24,13 +24,8 @@ const ts = () => new Date().toISOString();
 const log = [];
 function out(line) { console.log(line); log.push(line); }
 
-function buildVS3Frame(text) {
-  const payload = Buffer.from(text, 'utf8').slice(0, 247);
-  return Buffer.concat([
-    Buffer.from([0xAA, 0x03, 0x01, 0x00, 0x01, 0x00, 0x01, payload.length]),
-    payload,
-  ]);
-}
+// Note: buildVS3Frame removed — V1 uses direct nonce LSB encoding, not VS3 frames.
+// See lib/vs3-frame.js for the shared frame builder used by V3/ghost share tests.
 
 function extractV1Byte(nonceHex) {
   const buf = Buffer.from(nonceHex.padStart(8, '0'), 'hex');
