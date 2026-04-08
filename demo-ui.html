@@ -1,0 +1,582 @@
+<!-- VS3 Encrypted Chat Demo UI — @license LGPL-2.1 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VS3 Encrypted Chat — Steganographic Mining Channel</title>
+<style>
+@import url('data:text/css,');
+
+:root {
+  --bg-deep: #06060b;
+  --bg-panel: #0c0c14;
+  --bg-input: #10101c;
+  --bg-hover: #16162a;
+  --border: #1a1a2e;
+  --border-active: #2a2a44;
+  --text: #c8c8d4;
+  --text-dim: #5a5a72;
+  --text-muted: #3a3a52;
+  --alice: #00d4aa;
+  --alice-dim: #00d4aa33;
+  --alice-glow: #00d4aa18;
+  --bob: #a855f7;
+  --bob-dim: #a855f733;
+  --bob-glow: #a855f718;
+  --amber: #f59e0b;
+  --amber-dim: #f59e0b33;
+  --amber-glow: #f59e0b18;
+  --red: #ef4444;
+  --green: #22c55e;
+  --mono: 'Courier New', 'Consolas', 'Liberation Mono', monospace;
+  --sans: 'Segoe UI', 'Helvetica Neue', system-ui, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+/* ── Top Bar ─────────────────────────────────────── */
+
+.topbar {
+  height: 36px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.topbar-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.topbar-title span { color: var(--amber); }
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  transition: background 0.3s;
+}
+
+.status-dot.connected {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+/* ── Main Layout ─────────────────────────────────── */
+
+.main {
+  display: flex;
+  height: calc(100% - 36px);
+  gap: 1px;
+  background: var(--border);
+}
+
+/* ── Chat Panel (Alice / Bob) ────────────────────── */
+
+.chat-panel {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-deep);
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-header-name {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.chat-header-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+
+.chat-header-meta .key { opacity: 0.6; }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-messages::-webkit-scrollbar { width: 4px; }
+.chat-messages::-webkit-scrollbar-track { background: transparent; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+
+.msg {
+  max-width: 90%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  animation: msgIn 0.25s ease-out;
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.msg-sent {
+  align-self: flex-end;
+  border: 1px solid var(--border-active);
+  background: var(--bg-input);
+}
+
+.msg-received {
+  align-self: flex-start;
+}
+
+.msg-time {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.msg-meta {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.chat-status {
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.chat-input-area {
+  display: flex;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--bg-input);
+  border: none;
+  outline: none;
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.chat-input::placeholder { color: var(--text-muted); }
+
+.chat-send {
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 0 14px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: background 0.15s;
+}
+
+.chat-send:hover { background: var(--bg-hover); }
+
+/* Alice colors */
+.panel-alice .chat-header-name { color: var(--alice); }
+.panel-alice .msg-received { background: var(--alice-dim); border: 1px solid var(--alice); border-opacity: 0.2; }
+.panel-alice .chat-send { color: var(--alice); }
+.panel-alice .chat-status { color: var(--alice); opacity: 0.5; }
+
+/* Bob colors */
+.panel-bob .chat-header-name { color: var(--bob); }
+.panel-bob .msg-received { background: var(--bob-dim); border: 1px solid var(--bob); }
+.panel-bob .chat-send { color: var(--bob); }
+.panel-bob .chat-status { color: var(--bob); opacity: 0.5; }
+
+/* ── Network Panel (center) ──────────────────────── */
+
+.network-panel {
+  flex: 1.4;
+  min-width: 0;
+  background: var(--bg-deep);
+  display: flex;
+  flex-direction: column;
+}
+
+.net-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+
+.net-section:last-child { border-bottom: none; }
+
+.net-section-header {
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--amber);
+  background: var(--amber-glow);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.net-section-header .dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.net-feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.net-feed::-webkit-scrollbar { width: 3px; }
+.net-feed::-webkit-scrollbar-track { background: transparent; }
+.net-feed::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 2px; }
+
+.feed-line {
+  animation: feedIn 0.2s ease-out;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes feedIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.feed-time { color: var(--text-muted); }
+.feed-nonce { color: var(--amber); }
+.feed-cipher { color: var(--red); opacity: 0.7; }
+.feed-key { color: var(--green); }
+.feed-label { color: var(--text-dim); }
+.feed-alice { color: var(--alice); }
+.feed-bob { color: var(--bob); }
+.feed-encrypted {
+  background: var(--amber-dim);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 10px;
+  color: var(--amber);
+}
+
+/* ── Noise background texture ────────────────────── */
+
+.main::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.015'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+.main > * { position: relative; z-index: 1; }
+
+/* ── Empty state ─────────────────────────────────── */
+.empty-state {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: center;
+  padding: 20px;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-title">VS3 Encrypted Chat <span>// Steganographic Mining Channel</span></div>
+  <div class="topbar-status">
+    <div class="status-dot" id="connDot"></div>
+    <span id="connLabel">DISCONNECTED</span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Alice Panel -->
+  <div class="chat-panel panel-alice">
+    <div class="chat-header">
+      <div class="chat-header-name">Alice</div>
+      <div class="chat-header-meta">
+        <span class="key" id="aliceKey">awaiting identity...</span>
+      </div>
+    </div>
+    <div class="chat-messages" id="aliceMsgs">
+      <div class="empty-state">Waiting for connection...</div>
+    </div>
+    <div class="chat-status" id="aliceStatus"></div>
+    <div class="chat-input-area">
+      <input class="chat-input" id="aliceInput" placeholder="Type a message..." autocomplete="off">
+      <button class="chat-send" onclick="sendMsg('alice')">Send</button>
+    </div>
+  </div>
+
+  <!-- Network Panel -->
+  <div class="network-panel">
+    <div class="net-section">
+      <div class="net-section-header"><div class="dot"></div> Pool View — What the adversary sees</div>
+      <div class="net-feed" id="poolFeed">
+        <div class="empty-state">No traffic yet</div>
+      </div>
+    </div>
+    <div class="net-section">
+      <div class="net-section-header"><div class="dot"></div> Ghost Shares — Stratum nonce stream</div>
+      <div class="net-feed" id="sharesFeed">
+        <div class="empty-state">No shares transmitted</div>
+      </div>
+    </div>
+    <div class="net-section">
+      <div class="net-section-header"><div class="dot"></div> Crypto — Key exchange & encryption</div>
+      <div class="net-feed" id="cryptoFeed">
+        <div class="empty-state">Awaiting key exchange...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bob Panel -->
+  <div class="chat-panel panel-bob">
+    <div class="chat-header">
+      <div class="chat-header-name">Bob</div>
+      <div class="chat-header-meta">
+        <span class="key" id="bobKey">awaiting identity...</span>
+      </div>
+    </div>
+    <div class="chat-messages" id="bobMsgs">
+      <div class="empty-state">Waiting for connection...</div>
+    </div>
+    <div class="chat-status" id="bobStatus"></div>
+    <div class="chat-input-area">
+      <input class="chat-input" id="bobInput" placeholder="Type a message..." autocomplete="off">
+      <button class="chat-send" onclick="sendMsg('bob')">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ts = () => new Date().toISOString().slice(11, 19);
+let ws = null;
+let firstMsg = { alice: true, bob: true };
+const feeds = { pool: 'poolFeed', shares: 'sharesFeed', crypto: 'cryptoFeed' };
+
+function connect() {
+  ws = new WebSocket('ws://localhost:3080');
+
+  ws.onopen = () => {
+    document.getElementById('connDot').classList.add('connected');
+    document.getElementById('connLabel').textContent = 'CONNECTED';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('connDot').classList.remove('connected');
+    document.getElementById('connLabel').textContent = 'DISCONNECTED';
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => {};
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handleEvent(msg);
+    } catch {}
+  };
+}
+
+function addLine(feedId, html) {
+  const feed = document.getElementById(feedId);
+  const empty = feed.querySelector('.empty-state');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'feed-line';
+  div.innerHTML = html;
+  feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+  // Cap lines
+  while (feed.children.length > 150) feed.removeChild(feed.firstChild);
+}
+
+function addChatMsg(who, direction, text, meta) {
+  const container = document.getElementById(who + 'Msgs');
+  const empty = container.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const div = document.createElement('div');
+  div.className = 'msg msg-' + direction;
+  div.innerHTML = `<div>${escHtml(text)}</div>
+    <div class="msg-time">${ts()}</div>
+    ${meta ? '<div class="msg-meta">' + meta + '</div>' : ''}`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function whoColor(who) {
+  return who === 'alice' ? 'feed-alice' : 'feed-bob';
+}
+
+function handleEvent(msg) {
+  const t = `<span class="feed-time">${ts()}</span> `;
+
+  switch (msg.type) {
+    case 'message': {
+      const who = msg.who;
+      if (msg.direction === 'sent') {
+        addChatMsg(who, 'sent', msg.text,
+          msg.overhead ? `${msg.bytes}B encrypted // ${msg.shares} ghost shares` : '');
+        addLine('cryptoFeed',
+          t + `<span class="${whoColor(who)}">${who}</span> <span class="feed-label">encrypted</span> ${msg.bytes}B <span class="feed-label">(+${msg.overhead}B overhead, ${msg.shares} shares)</span>`);
+      } else {
+        // Determine which panel: if Bob received, show in Bob's panel
+        addChatMsg(who, 'received', msg.text,
+          msg.bytes ? `decrypted from ${msg.bytes}B ciphertext` : '');
+      }
+      break;
+    }
+
+    case 'crypto': {
+      addLine('cryptoFeed',
+        t + `<span class="${whoColor(msg.who)}">${msg.who}</span> <span class="feed-key">${escHtml(msg.text)}</span>`);
+      // Update header key display
+      if (msg.pubkey) {
+        document.getElementById(msg.who + 'Key').textContent =
+          'X25519 ' + msg.pubkey.slice(0, 24) + '...';
+      }
+      break;
+    }
+
+    case 'shares': {
+      const nonces = (msg.nonces || []).map(n =>
+        `<span class="feed-nonce">${n}</span>`).join(' ');
+      const more = msg.total > (msg.nonces || []).length ?
+        ` <span class="feed-label">+${msg.total - (msg.nonces || []).length} more</span>` : '';
+      addLine('sharesFeed',
+        t + `<span class="${whoColor(msg.who)}">${msg.who}</span> ${msg.count} shares: ${nonces}${more}`);
+      break;
+    }
+
+    case 'pool-view': {
+      addLine('poolFeed',
+        t + `<span class="${whoColor(msg.who)}">${msg.who}</span> ` +
+        `<span class="feed-encrypted">${msg.frameType}</span> ` +
+        `<span class="feed-label">${msg.size}B</span> ` +
+        `<span class="feed-cipher">${msg.ciphertext}</span>`);
+      break;
+    }
+
+    case 'pool-log': {
+      if (msg.text && msg.text.includes('[VS3]')) {
+        addLine('poolFeed',
+          t + `<span class="feed-label">${escHtml(msg.text)}</span>`);
+      }
+      break;
+    }
+
+    case 'status': {
+      const el = document.getElementById(msg.who + 'Status');
+      if (el) el.textContent = msg.text;
+      addLine('cryptoFeed',
+        t + `<span class="${whoColor(msg.who)}">${msg.who}</span> <span class="feed-label">${escHtml(msg.text)}</span>`);
+      break;
+    }
+
+    case 'error': {
+      addLine('cryptoFeed',
+        t + `<span class="${whoColor(msg.who)}">${msg.who}</span> <span style="color:var(--red)">${escHtml(msg.text)}</span>`);
+      break;
+    }
+  }
+}
+
+function sendMsg(who) {
+  const input = document.getElementById(who + 'Input');
+  const text = input.value.trim();
+  if (!text || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ action: 'send', who, text }));
+  input.value = '';
+  input.focus();
+}
+
+// Enter key
+document.getElementById('aliceInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMsg('alice');
+});
+document.getElementById('bobInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMsg('bob');
+});
+
+connect();
+</script>
+</body>
+</html>
