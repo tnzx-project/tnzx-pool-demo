@@ -10,7 +10,7 @@
  *                    Bob   ──TCP Stratum──▶ [VS3 Proxy :14444]     (real Monero pool)
  *
  *   The VS3 proxy runs as an independent process (bin/vs3-proxy-cli.js).
- *   It is the M2 deliverable — a standalone middleware, not a library.
+ *   It is a standalone middleware process, not a library.
  *
  *   - Ghost shares are intercepted by the proxy, assembled into VS3 frames
  *   - Real shares pass through to HashVault untouched
@@ -341,7 +341,7 @@ async function main() {
   console.log(`  [proxy] Starting VS3 proxy as standalone process...`);
   console.log(`          :${PROXY_PORT} → ${UPSTREAM_HOST}:${UPSTREAM_PORT} (${UPSTREAM_NAME})`);
 
-  // Start VS3 proxy as a standalone process (M2 deliverable)
+  // Start VS3 proxy as a standalone process
   const proxyProc = spawn('node', [
     'proxy/bin/vs3-proxy-cli.js',
     '--listen', String(PROXY_PORT),

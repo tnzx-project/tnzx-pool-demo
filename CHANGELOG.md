@@ -68,7 +68,6 @@
 ### Added
 - Bidirectional chat mode (`chat` command in `vs3-client.js`)
 - Stats API on port 8090 (`GET /stats` endpoint)
-- `GRANT_REVIEWERS_GUIDE.md` for technical grant reviewers
 - `CODE-REVIEW.md` documenting pre-publication review findings
 
 ### Fixed
