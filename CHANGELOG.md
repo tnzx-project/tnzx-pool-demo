@@ -68,7 +68,7 @@
 ### Added
 - Bidirectional chat mode (`chat` command in `vs3-client.js`)
 - Stats API on port 8090 (`GET /stats` endpoint)
-- `CODE-REVIEW.md` documenting pre-publication review findings
+- Removed `CODE-REVIEW.md` (consolidated into `TECHNICAL_GUIDE.md`)
 
 ### Fixed
 - Ghost share detection: difficulty threshold now configurable via `ghostDiffMax`

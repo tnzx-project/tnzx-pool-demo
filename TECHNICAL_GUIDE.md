@@ -43,7 +43,7 @@ const payload = Buffer.concat([nb.slice(1,4), tb.slice(2,4)]); // 5 bytes
 
 The ntime high word preserves the real Unix epoch, keeping it within the pool's acceptance window.
 
-**Protocol note:** `ntime` is a TNZX extension to Monero Stratum. Standard XMRig does not send this field. Ghost shares require tnzxminer or a VS3 proxy.
+**Protocol note:** `ntime` is a TNZX extension to Monero Stratum. Standard XMRig does not send this field. Ghost shares require a VS-enhanced miner (e.g., vs-miner) or a VS3 proxy.
 
 ## Frame Format
 

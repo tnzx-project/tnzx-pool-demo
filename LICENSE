@@ -59,9 +59,3 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 Full license text: https://www.gnu.org/licenses/lgpl-2.1.html
-
----
-
-Note on licensing: The Falo anonymous coordination protocol (protocols/falo/ and papers/falo/)
-is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-Full text: https://www.gnu.org/licenses/agpl-3.0.html
