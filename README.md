@@ -1,6 +1,6 @@
 # TNZX VS3 — Pool Demo and Proxy POC
 
-> **Security notice:** This is a research proof-of-concept. It has not undergone an independent security audit. Do not deploy in environments where communication security is critical to personal safety without independent verification. Messages are not encrypted at this layer (see [tnzx-protocol](https://github.com/tnzx-project/tnzx-protocol) for E2E encryption).
+> **Security notice:** This is a research proof-of-concept. It has not undergone an independent security audit. Do not deploy in environments where communication security is critical to personal safety without independent verification. E2E encryption (X25519 + XChaCha20-Poly1305) is available via `vs3-chat.js` and [`@tnzx/sdk`](https://github.com/tnzx-project/tnzx-protocol/tree/master/packages/sdk).
 
 Proof-of-concept implementations of the [Visual Stratum protocol](https://github.com/tnzx-project/tnzx-protocol). Two deployment models demonstrated:
 
