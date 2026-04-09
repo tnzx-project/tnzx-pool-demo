@@ -235,7 +235,7 @@ const D={
   },
   async msg(){
     if(!this.session){L('i','&#9888; Key exchange first.');return}
-    const m=['Ciao, tutto bene?','Pagamento confermato.','Ordine #4821','Documento inviato.'][this.n%4];
+    const m=['I am safe. I love you.','I am safe. Meet me at the bridge.','Tomorrow at dawn.','The document is with the courier.'][this.n%4];
     L('msg',`&#128172; Alice: "${m}"`);
     env('0x01 TEXT',`"${m}"`);
     L('enc',`  encrypt(XChaCha20, session_key, nonce_${this.n})`);
