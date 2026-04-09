@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TNZX Protocol — Messaging Flow</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+h1{font-size:18px;font-weight:600;color:#e6edf3;margin-bottom:4px;letter-spacing:-.3px}
+.subtitle{font-size:12px;color:#8b949e;margin-bottom:20px}
+a{color:#58a6ff;text-decoration:none}
+
+/* Arena */
+.arena{position:relative;width:100%;max-width:720px;height:320px;border:1px solid #30363d;border-radius:8px;background:#161b22;overflow:hidden;margin-bottom:16px}
+
+/* SVG layer */
+.arena svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.arena svg line{stroke:#30363d;stroke-width:1.5}
+.arena svg line.active-line{stroke:#58a6ff;stroke-width:2;filter:drop-shadow(0 0 3px rgba(88,166,255,.4))}
+
+/* Actors */
+.actor{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;transition:filter .2s}
+.actor-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;border:2px solid #30363d;transition:border-color .3s,box-shadow .3s}
+.actor-name{font-size:11px;font-weight:600;color:#e6edf3}
+.actor-role{font-size:9px;color:#8b949e}
+.actor.glow .actor-icon{box-shadow:0 0 12px rgba(88,166,255,.5);border-color:#58a6ff}
+
+.a-alice{left:6%;top:50%;transform:translateY(-50%)}
+.a-alice .actor-icon{background:#1a3a2a;color:#3fb950;border-color:#238636}
+.a-miner{left:6%;top:82%}
+.a-miner .actor-icon{background:#2a1f0e;color:#d29922;border-color:#9e6a03;font-size:16px}
+.a-pool{left:50%;top:50%;transform:translate(-50%,-50%)}
+.a-pool .actor-icon{background:#2a1520;color:#f85149;border-color:#da3633;width:58px;height:58px;font-size:22px}
+.a-proxy{left:50%;top:82%;transform:translateX(-50%)}
+.a-proxy .actor-icon{background:#1f1a2e;color:#bc8cff;border-color:#8b5cf6;font-size:16px}
+.a-bob{right:6%;top:50%;transform:translateY(-50%)}
+.a-bob .actor-icon{background:#0d2136;color:#58a6ff;border-color:#1f6feb}
+.a-miner-b{right:6%;top:82%}
+.a-miner-b .actor-icon{background:#2a1f0e;color:#d29922;border-color:#9e6a03;font-size:16px}
+
+/* Packet animation */
+@keyframes fly-ab{0%{left:10%;top:45%;opacity:1}48%{left:48%;top:42%;opacity:1}100%{left:87%;top:45%;opacity:0}}
+@keyframes fly-ba{0%{left:87%;top:45%;opacity:1}48%{left:48%;top:42%;opacity:1}100%{left:10%;top:45%;opacity:0}}
+@keyframes fly-a-pool{0%{left:10%;top:45%;opacity:1}100%{left:48%;top:42%;opacity:0}}
+@keyframes fly-pool-b{0%{left:48%;top:42%;opacity:1}100%{left:87%;top:45%;opacity:0}}
+@keyframes fly-b-pool{0%{left:87%;top:45%;opacity:1}100%{left:48%;top:42%;opacity:0}}
+@keyframes fly-pool-a{0%{left:48%;top:42%;opacity:1}100%{left:10%;top:45%;opacity:0}}
+
+.pkt{position:absolute;width:10px;height:10px;border-radius:3px;pointer-events:none;z-index:20}
+.pkt-key{background:#bc8cff;box-shadow:0 0 6px #bc8cff}
+.pkt-msg{background:#58a6ff;box-shadow:0 0 6px #58a6ff}
+.pkt-ack{background:#3fb950;box-shadow:0 0 6px #3fb950}
+.pkt-ghost{background:#d29922;box-shadow:0 0 6px #d29922;border-radius:50%}
+.pkt-enc{background:#f85149;box-shadow:0 0 6px #f85149}
+
+/* Envelope */
+.envelope{width:100%;max-width:720px;border:1px solid #30363d;border-radius:8px;background:#161b22;padding:12px;margin-bottom:16px;font-family:'Cascadia Code',Consolas,monospace;font-size:11px}
+.envelope-title{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-family:system-ui,sans-serif}
+.env-layers{border:1px dashed #da3633;border-radius:4px;padding:6px 8px}
+.env-l1{color:#f85149;font-size:9px;font-weight:600;margin-bottom:4px}
+.env-l2{border:1px dashed #d29922;border-radius:4px;padding:5px 8px;margin:2px 0}
+.env-l2-label{color:#d29922;font-size:9px;font-weight:600;margin-bottom:3px}
+.env-l3{border:1px dashed #3fb950;border-radius:4px;padding:4px 8px}
+.env-l3-label{color:#3fb950;font-size:9px;font-weight:600;margin-bottom:2px}
+.env-data{color:#8b949e;font-size:10px}
+.env-data b{color:#e6edf3}
+.env-note{color:#484f58;font-size:9px;margin-top:6px;font-family:system-ui,sans-serif}
+
+/* Controls */
+.controls{display:flex;flex-wrap:wrap;gap:6px;width:100%;max-width:720px;margin-bottom:16px}
+.btn{padding:6px 14px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:11px;font-family:system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s;white-space:nowrap}
+.btn:hover{background:#30363d;border-color:#8b949e}
+.btn:active{background:#161b22}
+.btn-primary{background:#238636;border-color:#2ea043;color:#fff}
+.btn-primary:hover{background:#2ea043}
+.btn .ic{margin-right:4px}
+
+/* Log */
+.log-wrap{width:100%;max-width:720px;border:1px solid #30363d;border-radius:8px;background:#0d1117;flex:1;min-height:140px;max-height:220px;overflow-y:auto;padding:8px;font-family:'Cascadia Code',Consolas,monospace;font-size:10px;line-height:1.6}
+.log-wrap::-webkit-scrollbar{width:6px}
+.log-wrap::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+.l-t{color:#484f58}.l-key{color:#bc8cff}.l-enc{color:#f85149}.l-msg{color:#79c0ff}.l-ack{color:#56d364}.l-ghost{color:#d29922}.l-pool{color:#f85149}.l-i{color:#8b949e}
+
+/* State bar */
+.state-bar{display:flex;align-items:center;gap:4px;width:100%;max-width:720px;margin-bottom:12px;font-size:10px}
+.st{padding:3px 8px;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-weight:600;font-family:'Cascadia Code',Consolas,monospace}
+.st.cur{color:#3fb950;border-color:#238636;background:#0d2818;box-shadow:0 0 6px rgba(63,185,80,.2)}
+.st-arr{color:#484f58;font-size:12px}
+.state-label{color:#8b949e;margin-right:6px;font-weight:600}
+
+/* Footer */
+.footer{margin-top:16px;font-size:10px;color:#484f58;text-align:center}
+
+/* Responsive */
+@media(max-width:600px){
+  .arena{height:260px}
+  .a-alice{left:2%}.a-bob{right:2%}
+  .a-miner,.a-miner-b,.a-proxy{display:none}
+  .controls{justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<h1>TNZX Protocol &mdash; Messaging Flow</h1>
+<p class="subtitle">End-to-end encrypted messaging over Stratum mining shares</p>
+
+<!-- Mining Gate State -->
+<div class="state-bar">
+  <span class="state-label">Mining Gate:</span>
+  <span class="st cur" id="s-off">OFF</span>
+  <span class="st-arr">&rarr;</span>
+  <span class="st" id="s-grace">GRACE</span>
+  <span class="st-arr">&rarr;</span>
+  <span class="st" id="s-active">ACTIVE</span>
+  <span class="st-arr">&rarr;</span>
+  <span class="st" id="s-susp">SUSPENDED</span>
+</div>
+
+<!-- Arena -->
+<div class="arena" id="arena">
+  <svg viewBox="0 0 720 320" preserveAspectRatio="none">
+    <line x1="100" y1="155" x2="330" y2="150" id="line-ap"/>
+    <line x1="390" y1="150" x2="620" y2="155" id="line-pb"/>
+    <line x1="72" y1="195" x2="72" y2="255" stroke-dasharray="4,3"/>
+    <line x1="360" y1="195" x2="360" y2="255" stroke-dasharray="4,3"/>
+    <line x1="648" y1="195" x2="648" y2="255" stroke-dasharray="4,3"/>
+  </svg>
+  <div class="actor a-alice" id="alice"><div class="actor-icon">A</div><div class="actor-name">Alice</div><div class="actor-role">sender</div></div>
+  <div class="actor a-miner"><div class="actor-icon">&#9874;</div><div class="actor-name">miner</div></div>
+  <div class="actor a-pool" id="pool"><div class="actor-icon">&#9878;</div><div class="actor-name">Pool</div><div class="actor-role">blind relay</div></div>
+  <div class="actor a-proxy"><div class="actor-icon">&#8644;</div><div class="actor-name">VS3 Proxy</div></div>
+  <div class="actor a-bob" id="bob"><div class="actor-icon">B</div><div class="actor-name">Bob</div><div class="actor-role">receiver</div></div>
+  <div class="actor a-miner-b"><div class="actor-icon">&#9874;</div><div class="actor-name">miner</div></div>
+</div>
+
+<!-- Envelope -->
+<div class="envelope" id="envelope">
+  <div class="envelope-title">Wire Envelope (what the pool sees)</div>
+  <div class="env-layers">
+    <div class="env-l1">0x05 ENCRYPTED &mdash; pool sees only this</div>
+    <div class="env-l2">
+      <div class="env-l2-label">XChaCha20-Poly1305 ciphertext</div>
+      <div class="env-l3">
+        <div class="env-l3-label">plaintext (Alice &amp; Bob only)</div>
+        <div class="env-data">type: <b id="e-type">---</b> &nbsp; payload: <b id="e-pay">waiting</b></div>
+      </div>
+    </div>
+    <div class="env-note">Pool cannot distinguish TEXT, ACK, or KEY_EXCHANGE. All wire traffic is identical opaque 0x05 blobs.</div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <button class="btn" onclick="D.mine()"><span class="ic">&#9874;</span>Start Mining</button>
+  <button class="btn" onclick="D.kex()"><span class="ic">&#128273;</span>Key Exchange</button>
+  <button class="btn" onclick="D.msg()"><span class="ic">&#128172;</span>Send Message</button>
+  <button class="btn" onclick="D.ack()"><span class="ic">&#10003;</span>Send ACK</button>
+  <button class="btn" onclick="D.ghost()"><span class="ic">&#128123;</span>Ghost Burst</button>
+  <button class="btn btn-primary" onclick="D.full()"><span class="ic">&#9654;</span>Full Demo</button>
+  <button class="btn" onclick="D.reset()"><span class="ic">&#8635;</span>Reset</button>
+</div>
+
+<!-- Log -->
+<div class="log-wrap" id="log"></div>
+
+<div class="footer">TNZX Protocol &mdash; Visual Stratum Spec v3 &mdash; <a href="https://github.com/tnzx">github.com/tnzx</a></div>
+
+<script>
+const $=id=>document.getElementById(id),log_el=$('log');
+const sl=(ms)=>new Promise(r=>setTimeout(r,ms));
+function L(c,t){const d=document.createElement('div');d.innerHTML=`<span class="l-t">[${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}]</span> <span class="l-${c}">${t}</span>`;log_el.appendChild(d);log_el.scrollTop=1e6}
+
+function setState(s){['off','grace','active','susp'].forEach(k=>{$('s-'+k).classList.remove('cur')});$('s-'+s).classList.add('cur')}
+function env(t,p){$('e-type').textContent=t;$('e-pay').textContent=p}
+function glow(id,ms=1200){const e=$(id);e.classList.add('glow');setTimeout(()=>e.classList.remove('glow'),ms)}
+function activeLine(id,ms=800){const e=$(id);e.classList.add('active-line');setTimeout(()=>e.classList.remove('active-line'),ms)}
+
+function pkt(cls,anim,dur=700){
+  return new Promise(r=>{
+    const p=document.createElement('div');
+    p.className='pkt '+cls;
+    p.style.animation=`${anim} ${dur}ms ease-in-out forwards`;
+    $('arena').appendChild(p);
+    setTimeout(()=>{p.remove();r()},dur);
+  });
+}
+async function sendAB(cls,dur=700){
+  glow('alice');activeLine('line-ap',dur/2);
+  await pkt(cls,'fly-a-pool',dur/2);
+  glow('pool');activeLine('line-pb',dur/2);
+  await pkt(cls,'fly-pool-b',dur/2);
+  glow('bob');
+}
+async function sendBA(cls,dur=700){
+  glow('bob');activeLine('line-pb',dur/2);
+  await pkt(cls,'fly-b-pool',dur/2);
+  glow('pool');activeLine('line-ap',dur/2);
+  await pkt(cls,'fly-pool-a',dur/2);
+  glow('alice');
+}
+
+const D={
+  mining:false,session:false,n:0,
+  async mine(){
+    if(this.mining){L('i','Mining already active');return}
+    L('ghost','&#9874; Alice & Bob start submitting shares...');
+    for(let i=0;i<3;i++){await pkt('pkt-ghost','fly-a-pool',300);L('ghost',`  share #${i+1} (regular, no stego)`);await sl(150)}
+    setState('grace');L('i','Mining Gate: OFF &rarr; GRACE (120s window)');
+    await sl(500);
+    for(let i=0;i<3;i++){await pkt('pkt-ghost','fly-b-pool',300);await sl(100)}
+    await sl(400);
+    setState('active');this.mining=true;
+    L('i','Mining Gate: GRACE &rarr; ACTIVE (&gt;50% hashrate)');
+    L('i','Channel open. Messaging enabled.');
+  },
+  async kex(){
+    if(!this.mining){L('i','&#9888; Start mining first.');return}
+    if(this.session){L('i','Session exists');return}
+    L('key','&#128273; Alice generates X25519 keypair');
+    env('0x04 KEY_EXCHANGE','alice_pubkey');
+    await sl(200);
+    L('key','Embed in ghost share, wrap as 0x05 ENCRYPTED');
+    await sendAB('pkt-key',800);
+    L('pool','&#9878; Pool: type=0x05, opaque. Routes to Bob.');
+    L('key','Bob decrypts, derives shared secret (ECDH)');
+    await sl(300);
+    L('key','&#128273; Bob responds with his pubkey');
+    await sendBA('pkt-key',800);
+    L('pool','&#9878; Pool: still just 0x05. Blind.');
+    L('key','Alice derives session key: HKDF-SHA256(secret, "tnzx-v3")');
+    L('key','&#10003; Session established. XChaCha20-Poly1305 ready.');
+    this.session=true;
+  },
+  async msg(){
+    if(!this.session){L('i','&#9888; Key exchange first.');return}
+    const m=['Ciao, tutto bene?','Pagamento confermato.','Ordine #4821','Documento inviato.'][this.n%4];
+    L('msg',`&#128172; Alice: "${m}"`);
+    env('0x01 TEXT',`"${m}"`);
+    L('enc',`  encrypt(XChaCha20, session_key, nonce_${this.n})`);
+    const shares=Math.ceil(m.length/5);
+    L('ghost',`  embed in ${shares} ghost shares (5 B/share, nonce[0]=0xAA)`);
+    await sendAB('pkt-enc',800);
+    L('pool',`&#9878; Pool: ${shares} shares, type=0x05, opaque. Routes.`);
+    L('msg',`Bob decrypts: "${m}" &#10003;`);
+    this.n++;
+  },
+  async ack(){
+    if(!this.session){L('i','&#9888; Key exchange first.');return}
+    L('ack','&#10003; Bob sends ACK');
+    env('0x02 ACK',`msg_id:${this.n-1}`);
+    await sendBA('pkt-ack',700);
+    L('pool','&#9878; Pool: 0x05. Cannot tell ACK from TEXT.');
+    L('ack','Alice: delivery confirmed.');
+  },
+  async ghost(){
+    if(!this.mining){L('i','&#9888; Start mining first.');return}
+    L('ghost','&#128123; Ghost burst &mdash; V3-Monero stego (5 B/share)');
+    for(let i=0;i<5;i++){
+      await pkt('pkt-ghost','fly-a-pool',250);
+      L('ghost',`  share[${i}] nonce=0xAA${Math.random().toString(16).slice(2,8)} payload=0x${Math.random().toString(16).slice(2,12)}`);
+      await sl(80);
+    }
+    L('ghost','  25 bytes embedded. Indistinguishable from mining traffic.');
+  },
+  async full(){
+    this.reset();await sl(200);
+    L('i','=== FULL FLOW ===');
+    await this.mine();await sl(400);
+    await this.kex();await sl(400);
+    await this.msg();await sl(300);
+    await this.ack();await sl(300);
+    await this.msg();await sl(300);
+    await this.ghost();
+    L('i','=== COMPLETE ===');
+    L('i','All traffic appeared as 0x05. Pool saw nothing. No metadata leaked.');
+  },
+  reset(){
+    this.mining=false;this.session=false;this.n=0;
+    log_el.innerHTML='';setState('off');env('---','waiting');
+    L('i','Ready. Press a button or run Full Demo.');
+  }
+};
+D.reset();
+</script>
+</body>
+</html>

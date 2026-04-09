@@ -59,6 +59,12 @@ See [`TECHNICAL_GUIDE.md`](TECHNICAL_GUIDE.md) for code walkthrough.
 
 ---
 
+## Interactive Demo
+
+**[Open the messaging flow demo](demo.html)** — walk through the full TNZX messaging flow visually: Mining Gate activation, X25519 key exchange, encrypted message delivery through ghost shares, and ACK. See how the pool sees only opaque `0x05 ENCRYPTED` frames while Alice and Bob exchange plaintext. No server needed — runs in the browser.
+
+---
+
 ## Architecture
 
 ```
