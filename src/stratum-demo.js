@@ -177,6 +177,14 @@ const CFG = {
   // Default 500: low enough to never conflict with real mining sessions, which
   // operate at difficulty 100,000+. Override via GHOST_DIFF_MAX env var if needed.
   ghostDiffMax: parseInt(process.env.GHOST_DIFF_MAX || '500'),
+  // Mining Gate parameters — configurable for different PoW profiles.
+  // See protocols/vs2/MINING-GATE.md for semantics.
+  gateWindowMs     : parseInt(process.env.GATE_WINDOW_MS     || '600000'),  // 10 min
+  gateThreshold    : parseFloat(process.env.GATE_THRESHOLD   || '0.5'),     // 50% of expected share rate
+  gateGraceMs      : parseInt(process.env.GATE_GRACE_MS      || '120000'),  // 2 min
+  gateCooldownMs   : parseInt(process.env.GATE_COOLDOWN_MS   || '300000'),  // 5 min
+  gateMinShares    : parseInt(process.env.GATE_MIN_SHARES    || '3'),
+  gateMinHashrate  : parseInt(process.env.GATE_MIN_HASHRATE  || '10'),      // H/s
 };
 
 // ── Daemon RPC ──────────────────────────────────────────────────────────────

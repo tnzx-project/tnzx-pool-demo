@@ -78,11 +78,15 @@ const GATE_SUSPENDED = 'SUSPENDED';
 
 class MiningGate {
   constructor(opts = {}) {
-    this.gracePeriodMs      = opts.gracePeriodMs      || 120000; // 2 min
-    this.cooldownMs         = opts.cooldownMs         || 300000; // 5 min
-    this.minSharesActivation = opts.minSharesActivation || 3;
-    this.minHashrate        = opts.minHashrate        || 10;     // H/s
-    this.windowMs           = opts.windowMs           || 600000; // 10 min
+    // All parameters are configurable via constructor opts or environment
+    // variables, enabling operators to tune the gate for different hashrate
+    // profiles (e.g., RandomX v2 with faster block times).
+    this.gracePeriodMs      = opts.gracePeriodMs      || parseInt(process.env.GATE_GRACE_MS      || '120000');  // 2 min
+    this.cooldownMs         = opts.cooldownMs         || parseInt(process.env.GATE_COOLDOWN_MS   || '300000');  // 5 min
+    this.minSharesActivation = opts.minSharesActivation || parseInt(process.env.GATE_MIN_SHARES  || '3');
+    this.minHashrate        = opts.minHashrate        || parseInt(process.env.GATE_MIN_HASHRATE  || '10');      // H/s
+    this.windowMs           = opts.windowMs           || parseInt(process.env.GATE_WINDOW_MS     || '600000');  // 10 min
+    this.threshold          = opts.threshold          || parseFloat(process.env.GATE_THRESHOLD   || '0.5');     // 50%
     this.state       = GATE_INACTIVE;
     this.connectedAt = null;
     this.suspendedAt = null;
