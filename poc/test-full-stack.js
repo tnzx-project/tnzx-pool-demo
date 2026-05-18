@@ -389,10 +389,13 @@ async function run() {
     console.log(`  Alice WS auth: ${aliceAuth?.ok ? 'OK (gate active)' : 'DENIED — ' + (aliceAuth?.reason || 'no response')}`);
     console.log(`  Bob WS auth:   ${bobAuth?.ok ? 'OK (gate active)' : 'DENIED — need PoW on Bob too'}`);
 
-    // Alice sends WS message to Bob
+    // Alice sends WS message to Bob.
+    // Proxy applies timing decorrelation (paper §6.2): random 500-3000 ms delay
+    // on WS delivery to prevent cross-channel timing correlation with Stratum.
+    // Wait > max delay before checking for Bob's receipt.
     if (aliceAuth?.ok) {
       aliceWs.send({ type: 'msg', to: BOB, text: 'WS: Real-time hello from Alice!' });
-      await sleep(300);
+      await sleep(3500);
 
       const bobWsMsg = bobWs.messages.find(m => m.type === 'msg' && m.from === ALICE);
       if (bobWsMsg) {
