@@ -1,7 +1,7 @@
 {
   "name": "tnzx-vs3-proxy",
   "version": "1.0.0",
-  "description": "VS3 Proxy — Universal Stratum steganographic relay. Deploy between any miner and any pool. Zero pool modification required.",
+  "description": "VS3 Proxy — Universal Stratum encapsulation relay. Deploy between any miner and any pool. Zero pool modification required.",
   "main": "index.js",
   "bin": {
     "vs3-proxy": "./bin/vs3-proxy-cli.js"
@@ -14,12 +14,12 @@
     "stratum",
     "proxy",
     "mining",
-    "steganography",
+    "encapsulated-transport",
     "monero",
     "bitcoin",
     "relay",
     "privacy",
-    "censorship-resistance"
+    "communication-resilience"
   ],
   "license": "LGPL-2.1",
   "repository": {

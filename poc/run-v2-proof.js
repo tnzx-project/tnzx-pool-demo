@@ -1,6 +1,6 @@
 'use strict';
 /**
- * run-v2-proof.js — V2 Steganography proof on a real Bitcoin pool
+ * run-v2-proof.js — V2 Data Encapsulation proof on a real Bitcoin pool
  *
  * Demonstrates: 3 bytes/share hidden in nonce LSB + extranonce2 trailing bytes
  * of REAL Bitcoin Stratum shares. Pool validates every share normally.
@@ -119,7 +119,7 @@ function connectBitcoin(port, host, wallet) {
 
 (async () => {
   out('================================================================');
-  out('  VS3 PROOF TRANSCRIPT — V2 Steganography on Real Bitcoin Pool');
+  out('  VS3 PROOF TRANSCRIPT — V2 Data Encapsulation on Real Bitcoin Pool');
   out('  Protocol: V2 (3 bytes/share: nonce LSB + extranonce2)');
   out('  Date: ' + ts());
   out('================================================================');
@@ -181,7 +181,7 @@ function connectBitcoin(port, host, wallet) {
 
   // Phase 2: V2 message
   out('');
-  out(ts() + ' --- Phase 2: V2 steganographic message (3 bytes/share) ---');
+  out(ts() + ' --- Phase 2: V2 encapsulated message (3 bytes/share) ---');
   const frame = buildVS3Frame(MESSAGE);
   const chunks = chunkFrame(frame, 3);
   out(ts() + ' [MSG] Plaintext: "' + MESSAGE + '"');

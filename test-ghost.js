@@ -1,9 +1,9 @@
 'use strict';
 /**
- * test-ghost.js — Ghost Share steganography proof-of-concept for TNZX
+ * test-ghost.js — Ghost Share data encapsulation proof-of-concept for TNZX
  *
  * This script demonstrates the core privacy primitive of the TNZX protocol:
- * arbitrary binary data ("VS3 frames") can be transmitted covertly through a
+ * arbitrary binary data ("VS3 frames") can be transmitted via the encapsulated channel through a
  * standard Stratum mining pool, hidden inside otherwise-valid share submissions.
  *
  * HOW TO RUN:
@@ -62,9 +62,9 @@ function buildVS3Frame(text) {
 }
 
 /**
- * chunkFrame(frameBytes) — Split a VS3 frame into 5-byte steganographic chunks.
+ * chunkFrame(frameBytes) — Split a VS3 frame into 5-byte encapsulated chunks.
  *
- * WHY 5 BYTES PER CHUNK — the heart of the steganography:
+ * WHY 5 BYTES PER CHUNK — the heart of the data encapsulation:
  *   A Stratum share submission contains two miner-controlled fields:
  *     • nonce  — 4 hex bytes (32 bits) submitted by the miner
  *     • ntime  — 4 hex bytes (32 bits) representing the block timestamp
@@ -142,7 +142,7 @@ function encodeGhostShare(reqId, minerId, jobId, chunk, vs3To) {
   // vs3_to is the destination wallet address for the hidden message.
   // It is attached ONLY to the first share of each frame sequence:
   //   - Repeating it on every share would be redundant and slightly increases
-  //     the statistical footprint of the covert channel.
+  //     the statistical footprint of the encapsulation channel.
   //   - The pool reads vs3_to once from chunk index 0 and retains it internally
   //     for the full frame reassembly; all subsequent shares omit the field.
   if (vs3To) params.vs3_to = vs3To;

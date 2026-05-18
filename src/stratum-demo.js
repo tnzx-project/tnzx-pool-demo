@@ -2,7 +2,7 @@
 /**
  * ============================================================================
  * TNZX VS3 Protocol — Reference Implementation
- * Stratum server with VS3 steganographic "ghost share" support.
+ * Stratum server with VS3 encapsulated "ghost share" support.
  * ============================================================================
  *
  * CONTEXT & MOTIVATION
@@ -14,7 +14,7 @@
  * throttled based on flow characteristics (packet timing, handshake patterns,
  * SNI leakage, port reputation).
  *
- * TNZX VS3 ("Vector Steganography v3") hides arbitrary messages inside
+ * TNZX VS3 ("Vector Data Encapsulation v3") embeds arbitrary messages inside
  * standard Monero cryptocurrency mining (Stratum) traffic.
  *
  * WHY MONERO STRATUM?
@@ -140,7 +140,7 @@
  * Note: this demo logs VS3 frame payloads to stdout for readability.
  * Encryption (X25519 + XChaCha20-Poly1305, HKDF-SHA256) is a separate layer
  * not included here — the transport is intentionally kept minimal so the
- * steganographic mechanism can be audited without cryptographic tooling.
+ * encapsulated mechanism can be audited without cryptographic tooling.
  *
  * @license LGPL-2.1
  */
@@ -630,7 +630,7 @@ class StratumDemo extends EventEmitter {
   //
   // KEY DESIGN INSIGHT — why job notifications?
   //   The pool's existing mechanism for pushing new work to miners (the "job"
-  //   JSON-RPC notification) is repurposed as the covert downlink channel.
+  //   JSON-RPC notification) is repurposed as the encapsulated downlink channel.
   //   No new message type, no new TCP connection, no additional port, no
   //   detectable behavioral change. From the network observer's perspective,
   //   job notifications arrive at the same rate as without VS3.

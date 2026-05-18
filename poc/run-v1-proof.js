@@ -1,6 +1,6 @@
 'use strict';
 /**
- * run-v1-proof.js — V1 Steganography proof on a real Monero pool
+ * run-v1-proof.js — V1 Data Encapsulation proof on a real Monero pool
  *
  * Demonstrates: message hidden in nonce LSB of REAL mining shares.
  * The pool validates every share. Sees nothing unusual.
@@ -34,7 +34,7 @@ function extractV1Byte(nonceHex) {
 
 (async () => {
   out('================================================================');
-  out('  VS3 PROOF TRANSCRIPT — V1 Steganography on Real Monero Pool');
+  out('  VS3 PROOF TRANSCRIPT — V1 Data Encapsulation on Real Monero Pool');
   out('  Protocol: V1 (1 byte/share hidden in nonce LSB of REAL shares)');
   out('  Pool: HashVault (pool.hashvault.pro:3333)');
   out('  Date: ' + ts());
@@ -96,7 +96,7 @@ function extractV1Byte(nonceHex) {
 
   // Phase 2: V1 message
   out('');
-  out(ts() + ' --- Phase 2: V1 steganographic message in real shares ---');
+  out(ts() + ' --- Phase 2: V1 encapsulated message in real shares ---');
   out(ts() + ' [MSG] Plaintext: "' + MESSAGE + '"');
   const frame = buildVS3Frame(MESSAGE);
   out(ts() + ' [MSG] VS3 frame: ' + frame.length + ' bytes (8-byte header + ' + (frame.length - 8) + '-byte payload)');

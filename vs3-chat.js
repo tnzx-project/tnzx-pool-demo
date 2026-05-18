@@ -1,6 +1,6 @@
 'use strict';
 /**
- * vs3-chat.js — End-to-end encrypted chat over steganographic mining channel
+ * vs3-chat.js — End-to-end encrypted chat over encapsulated mining channel
  *
  * Two parties exchange encrypted messages hidden in Stratum mining traffic.
  * Each message uses a fresh ephemeral X25519 key (Perfect Forward Secrecy).
@@ -60,7 +60,7 @@ const pendingMessages = []; // queued until key exchange
 
 console.log('');
 console.log('  ╔══════════════════════════════════════════════════════════╗');
-console.log('  ║  VS3 Encrypted Chat — Steganographic Mining Channel     ║');
+console.log('  ║  VS3 Encrypted Chat — Encapsulated Mining Channel     ║');
 console.log('  ╚══════════════════════════════════════════════════════════╝');
 console.log('');
 console.log(`  Identity : ${myKeys.publicKey.toString('hex').slice(0, 16)}...`);

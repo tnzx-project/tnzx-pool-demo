@@ -69,7 +69,7 @@ if (!['listen','send','chat'].includes(mode) || !myWallet ||
 // ─── VS3 frame and share encoding ────────────────────────────────────────────
 //
 // These helpers mirror the encoding in stratum-demo.js and test-ghost.js.
-// See those files for detailed commentary on the steganographic field
+// See those files for detailed commentary on the encapsulated field
 // layout and why each value is chosen.
 //
 // Frame format (8-byte header + N-byte payload):

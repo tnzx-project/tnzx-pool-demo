@@ -5,7 +5,7 @@
  * Demonstrates ALL protocol layers:
  *   Phase 1: Mining Gate — ghost shares BLOCKED until miner proves PoW
  *   Phase 2: Mining Gate opens — ghost shares NOW accepted (V3, 5 B/share)
- *   Phase 3: V1 steganographic channel — data hidden in real share nonces
+ *   Phase 3: V1 encapsulated channel — data hidden in real share nonces
  *   Phase 4: WebSocket relay — real-time messaging after bootstrap
  *
  * Run: node poc/test-full-stack.js
@@ -312,7 +312,7 @@ async function run() {
   results.push({ name: 'V3 ghost share message delivered to Bob', pass: v3Received });
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  PHASE 3: V1 steganographic channel (data in real share nonces)
+  //  PHASE 3: V1 encapsulated channel (data in real share nonces)
   // ══════════════════════════════════════════════════════════════════════════
 
   console.log('\n--- PHASE 3: V1 stego — data hidden in REAL share nonces ---');
@@ -338,7 +338,7 @@ async function run() {
   if (v1Event) console.log(`  V1 message: "${v1Event.text}"`);
   console.log(`  [${v1Pass ? 'PASS' : 'FAIL'}] V1 stego channel works (data in real shares)`);
   console.log(`  Real shares forwarded to pool: ${proxy.stats.realSharesForwarded}`);
-  results.push({ name: 'V1 steganographic extraction from real shares', pass: v1Pass });
+  results.push({ name: 'V1 encapsulated extraction from real shares', pass: v1Pass });
 
   // ══════════════════════════════════════════════════════════════════════════
   //  PHASE 4: WebSocket relay (real-time after bootstrap)

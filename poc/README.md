@@ -4,9 +4,9 @@ Working demonstrations of the Visual Stratum protocol on real mining infrastruct
 
 ## What This Proves
 
-1. **V1 steganography** — 1 byte per share hidden in the nonce LSB of real, validated mining shares. The pool processes the share, pays the miner, and never knows a message was present. Works on any PoW chain.
+1. **V1 data encapsulation** — 1 byte per share hidden in the nonce LSB of real, validated mining shares. The pool processes the share, pays the miner, and never knows a message was present. Works on any PoW chain.
 
-2. **V2 steganography** — 3 bytes per share using nonce LSB + extranonce2 trailing bytes. Standard Bitcoin Stratum fields. No protocol extensions.
+2. **V2 data encapsulation** — 3 bytes per share using nonce LSB + extranonce2 trailing bytes. Standard Bitcoin Stratum fields. No protocol extensions.
 
 3. **VS3 proxy** — A TCP proxy between miners and any standard pool. Extracts V1/V2 from real shares, intercepts V3 ghost shares, routes messages between connected miners. The pool is unmodified.
 
@@ -34,8 +34,8 @@ Full transcripts with timestamps in `results/`.
 
 ### Proof Transcripts (run against real pools)
 
-- **run-v1-proof.js** — V1 steganography on HashVault (Monero). Message hidden in nonce LSB of real mining shares.
-- **run-v2-proof.js** — V2 steganography on Braiins Pool (Bitcoin). 3 bytes/share in nonce + extranonce2.
+- **run-v1-proof.js** — V1 data encapsulation on HashVault (Monero). Message hidden in nonce LSB of real mining shares.
+- **run-v2-proof.js** — V2 data encapsulation on Braiins Pool (Bitcoin). 3 bytes/share in nonce + extranonce2.
 - **run-alice-bob-proof.js** — Bidirectional messaging through HashVault. Alice sends, Bob receives. Pool sees nothing.
 
 ### Additional Tests
@@ -64,7 +64,7 @@ Full transcripts with timestamps in `results/`.
                       Pool sees normal mining traffic
 ```
 
-### V1: Truly Steganographic (1 byte/share)
+### V1: Truly Encapsulated (1 byte/share)
 
 The miner constrains the two least-significant nibbles of the nonce to carry one payload byte, then searches for a valid PoW solution in the remaining bits. The share is real. The pool validates it. An observer cannot distinguish it from an ordinary share.
 

@@ -77,7 +77,7 @@ function parseArgs(argv) {
 
 function printUsage() {
   console.log(`
-VS3 Proxy — Universal Stratum Steganographic Relay
+VS3 Proxy — Universal Stratum Encapsulated Relay
 
 USAGE:
   vs3-proxy --upstream <pool:port> [options]

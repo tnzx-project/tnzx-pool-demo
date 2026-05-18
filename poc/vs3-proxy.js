@@ -6,7 +6,7 @@
  * Implements the complete VS3 protocol stack:
  *
  *   1. Mining Gate  — PoW state machine gates VS3 access (anti-Sybil)
- *   2. V1 Channel   — 1 byte/share hidden in nonce LSB of REAL shares (steganographic)
+ *   2. V1 Channel   — 1 byte/share hidden in nonce LSB of REAL shares (encapsulated)
  *   3. V3 Channel   — 5 bytes/share via ghost shares (high bandwidth)
  *   4. WebSocket     — Real-time relay after stego bootstrap
  *
@@ -334,7 +334,7 @@ class VS3Proxy extends EventEmitter {
       ghostTo: null,
       // ghostSharesPerMinute removed: rate limiting is now global per-IP (see _checkGhostRate)
       fragmentBuffers: new Map(),
-      // V1/V2 steganographic state
+      // V1/V2 encapsulated state
       v1Buffer: Buffer.alloc(0),
       v1To: null,
       v1Active: false,
@@ -643,7 +643,7 @@ class VS3Proxy extends EventEmitter {
     this._parseFrames(conn, 'ghostBuffer', 'ghostTo', 'vs3');
   }
 
-  // ── V1 Steganographic Channel (1 byte/share from real shares) ────────────
+  // ── V1 Encapsulated Channel (1 byte/share from real shares) ────────────
 
   _parseV1Frames(conn) {
     this._parseFrames(conn, 'v1Buffer', 'v1To', 'v1');
