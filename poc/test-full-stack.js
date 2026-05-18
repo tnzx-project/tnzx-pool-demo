@@ -17,6 +17,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 const VS3Proxy = require('./vs3-proxy.js');
+const { hmacDeriveSessionKey, hmacSentinel } = VS3Proxy._hmac;
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -55,8 +56,13 @@ function chunkFrame(frameBytes, bytesPerChunk) {
   return chunks;
 }
 
-function encodeGhostShare(reqId, minerId, jobId, chunk, vs3To) {
-  const nonce = 'aa' +
+function encodeGhostShare(reqId, minerId, jobId, chunk, vs3To, sessionKey) {
+  // Sentinel byte: HMAC-tagged (Appendix D) if sessionKey provided, else legacy 0xAA fallback.
+  // Proxy auto-generates per-connection sessionToken at login and derives sessionKey via HKDF;
+  // when sessionKey is set proxy uses hmacVerify() (Appendix D) for ghost detection.
+  const payload3 = Buffer.from([chunk[0], chunk[1], chunk[2]]);
+  const sentinelByte = sessionKey ? hmacSentinel(sessionKey, payload3) : 0xAA;
+  const nonce = sentinelByte.toString(16).padStart(2, '0') +
     chunk[0].toString(16).padStart(2, '0') +
     chunk[1].toString(16).padStart(2, '0') +
     chunk[2].toString(16).padStart(2, '0');
@@ -103,7 +109,15 @@ function connectStratum(port, wallet) {
           const msg = JSON.parse(line);
           if (msg.result && msg.result.id) {
             clearTimeout(timeout);
-            resolve({ sock, minerId: msg.result.id, jobId: msg.result.job?.job_id, buf: '' });
+            // Extract vs3_session token injected by proxy on login response (Appendix D HMAC mode).
+            // Token lives at msg.result.vs3_session (sibling of msg.result.extensions); see proxy
+            // bugfix 2026-05-19 — extensions can be an array on some pools, so vs3_session
+            // is placed at top of result to survive JSON serialisation regardless.
+            const sessionTokenHex = msg.result.vs3_session;
+            const sessionKey = sessionTokenHex
+              ? hmacDeriveSessionKey(Buffer.from(sessionTokenHex, 'hex'), wallet)
+              : null;
+            resolve({ sock, minerId: msg.result.id, jobId: msg.result.job?.job_id, buf: '', sessionKey });
           }
           if (msg.error) { clearTimeout(timeout); reject(new Error(JSON.stringify(msg.error))); }
         } catch {}
@@ -229,6 +243,7 @@ async function run() {
   const alice = await connectStratum(PROXY_PORT, ALICE);
   const bob   = await connectStratum(PROXY_PORT, BOB);
   console.log(`  Alice: ${alice.minerId}  Bob: ${bob.minerId}`);
+  console.log(`  Alice sessionKey: ${alice.sessionKey ? 'SET (HMAC mode)' : 'NULL (legacy fallback)'}  Bob sessionKey: ${bob.sessionKey ? 'SET' : 'NULL'}`);
 
   // Set up Bob's VS3 listener
   let bobVs3Messages = [];
@@ -261,7 +276,7 @@ async function run() {
   const preGhostFrame = buildVS3Frame('This should be blocked');
   const preChunks = chunkFrame(preGhostFrame, 5);
   for (const chunk of preChunks) {
-    alice.sock.write(encodeGhostShare(reqId++, alice.minerId, alice.jobId, chunk, BOB) + '\n');
+    alice.sock.write(encodeGhostShare(reqId++, alice.minerId, alice.jobId, chunk, BOB, alice.sessionKey) + '\n');
     await sleep(50);
   }
   await sleep(300);
@@ -301,7 +316,7 @@ async function run() {
   const v3Chunks = chunkFrame(v3Frame, 5);
   for (let i = 0; i < v3Chunks.length; i++) {
     const vs3To = i === 0 ? BOB : null;
-    alice.sock.write(encodeGhostShare(reqId++, alice.minerId, alice.jobId, v3Chunks[i], vs3To) + '\n');
+    alice.sock.write(encodeGhostShare(reqId++, alice.minerId, alice.jobId, v3Chunks[i], vs3To, alice.sessionKey) + '\n');
     await sleep(100);
   }
   await sleep(500);

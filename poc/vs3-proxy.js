@@ -585,16 +585,34 @@ class VS3Proxy extends EventEmitter {
         continue;
       }
 
-      // ── Monero: login response with job ──
-      if (msg.result && msg.result.id && msg.result.job) {
+      // ── Monero: login response (id present, with or without job inline) ──
+      // BUGFIX 2026-05-19: vs3_session injection was previously gated on the
+      // presence of msg.result.job; some pools (e.g. HashVault) send the login
+      // response with only `result.id` and deliver the first job as a separate
+      // `job` notification, which left the miner without a sessionToken and
+      // forced legacy 0xAA fallback (Mining Gate cannot then enforce the HMAC
+      // ghost-share detection path). The injection is now performed on any
+      // login response carrying result.id.
+      if (msg.result && msg.result.id) {
         conn.minerId = msg.result.id;
-        conn.lastJob = { method: 'job', params: msg.result.job };
-        // Inject HMAC session token into login response (Appendix D)
+        if (msg.result.job) {
+          conn.lastJob = { method: 'job', params: msg.result.job };
+        }
+        // Inject HMAC session token into login response (Appendix D).
         // The miner reads vs3_session and derives the same session key.
+        //
+        // BUGFIX 2026-05-19: vs3_session was previously injected into
+        // msg.result.extensions. Several pools (e.g. HashVault) send
+        // `extensions` as an ARRAY of capability strings like ["algo","keepalive"]
+        // rather than an object; setting an own-property on an array survives
+        // in memory but is dropped by JSON.stringify, so the miner never saw
+        // the token and fell back to legacy 0xAA mode. We now place
+        // vs3_session at the top of `result` (sibling of `extensions`),
+        // which is JSON-serialisable regardless of how the pool formats
+        // `extensions`.
         if (conn.sessionToken && conn.wallet) {
           conn.sessionKey = hmacDeriveSessionKey(conn.sessionToken, conn.wallet);
-          if (!msg.result.extensions) msg.result.extensions = {};
-          msg.result.extensions.vs3_session = conn.sessionToken.toString('hex');
+          msg.result.vs3_session = conn.sessionToken.toString('hex');
         }
       }
 
@@ -871,4 +889,4 @@ class VS3Proxy extends EventEmitter {
 module.exports = VS3Proxy;
 
 // Export HMAC helpers for unit testing (Appendix D validation)
-module.exports._hmac = { hmacDeriveKey, hmacSentinel, hmacVerify };
+module.exports._hmac = { hmacDeriveKey, hmacDeriveSessionKey, hmacSentinel, hmacVerify };
