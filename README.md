@@ -4,7 +4,7 @@
 
 Proof-of-concept implementations of the [Visual Stratum protocol](https://github.com/tnzx-project/tnzx-protocol). Two deployment models demonstrated:
 
-1. **VS3 Proxy** (`poc/`) — sits between any miner and any standard pool. Extracts steganographic data from real shares, intercepts ghost shares, routes messages. The pool is unmodified.
+1. **VS3 Proxy** (`poc/`) — sits between any miner and any standard pool. Extracts encapsulated data from real shares, intercepts ghost shares, routes messages. The pool is unmodified.
 2. **VS3-Aware Pool** (`src/stratum-demo.js`) — a Stratum server with native ghost share detection and message routing.
 
 Both share the same frame format and encoding. No external dependencies. Node.js 16+.
@@ -30,10 +30,10 @@ Timestamped transcripts: [`poc/results/`](poc/results/)
 ## Quick Start — Proxy (any pool)
 
 ```bash
-# V1 steganography proof on real Monero pool
+# V1 encapsulation proof on real Monero pool
 node poc/run-v1-proof.js
 
-# V2 steganography proof on real Bitcoin pool
+# V2 encapsulation proof on real Bitcoin pool
 node poc/run-v2-proof.js
 
 # Alice-to-Bob messaging on real pool
@@ -94,7 +94,7 @@ Model 2 — VS3-Aware Pool (native support):
 | **V2** | 3 | V1 + extranonce2 (real share) | Maximum | Bitcoin |
 | **V3** | 5 | Ghost share (sentinel 0xAA) | Lower | Monero |
 
-V1 and V2 are truly steganographic — the shares pass full PoW validation. V3 is an optional bandwidth boost with a detectable sentinel.
+V1 and V2 are fully cover-bound — payload is embedded in real shares that pass full PoW validation. V3 is an optional bandwidth boost with a detectable sentinel.
 
 ---
 
@@ -133,7 +133,7 @@ Full specification, design paper, reference implementation (client-side crypto +
 
 [tnzx-project/tnzx-protocol](https://github.com/tnzx-project/tnzx-protocol)
 
-This pool demo implements the *pool-side* of the protocol. The reference implementation in `tnzx-protocol` implements the *client-side* (E2E encryption, steganographic encoding, Mining Gate verification). Together they form a complete VS3 stack.
+This pool demo implements the *pool-side* of the protocol. The reference implementation in `tnzx-protocol` implements the *client-side* (E2E encryption, encapsulation encoding, Mining Gate verification). Together they form a complete VS3 stack.
 
 ## License
 
