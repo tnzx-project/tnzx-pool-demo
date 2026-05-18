@@ -156,6 +156,7 @@ async function run() {
     listenPort: PROXY_PORT,
     upstreamHost: poolHost,
     upstreamPort: poolPort,
+    hmacSalt: false, // legacy 0xAA mode — test uses fixed-sentinel ghost encoding; HMAC mode is exercised by test-full-stack.js
   });
   await proxy.start();
   console.log(`[1] VS3 proxy running on :${PROXY_PORT} → ${poolName} (${poolHost}:${poolPort})`);

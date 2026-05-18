@@ -102,6 +102,7 @@ function connectAndLogin(port, wallet, label) {
     listenPort: PROXY_PORT, wsPort: PROXY_PORT + 1,
     upstreamHost: POOL_HOST, upstreamPort: POOL_PORT,
     gate: { minSharesActivation: 3, minHashrate: 0 },
+    hmacSalt: false, // legacy 0xAA mode — script produces fixed-sentinel ghost encoding; matches historical transcript at poc/results/03-alice-bob-hashvault.txt
   });
   const events = [];
   proxy.on('vs3-frame', e => events.push(e));

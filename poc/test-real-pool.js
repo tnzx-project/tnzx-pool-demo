@@ -133,6 +133,7 @@ async function testWithProxy(pool) {
     listenPort: PROXY_PORT,
     upstreamHost: pool.host,
     upstreamPort: pool.port,
+    hmacSalt: false, // legacy 0xAA mode — script produces fixed-sentinel ghost encoding; HMAC mode is exercised by test-full-stack.js
   });
 
   let assembledMessage = null;
