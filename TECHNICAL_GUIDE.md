@@ -1,6 +1,6 @@
 # Technical Guide — VS3 Pool Demo
 
-This document is for technically qualified readers who want to understand the pool demo code (`src/stratum-demo.js`). For the proxy and V1/V2 steganography, see [`poc/README.md`](poc/README.md).
+This document is for technically qualified readers who want to understand the pool demo code (`src/stratum-demo.js`). For the proxy and V1/V2 encapsulation, see [`poc/README.md`](poc/README.md).
 
 ---
 
@@ -8,7 +8,7 @@ This document is for technically qualified readers who want to understand the po
 
 `src/stratum-demo.js` is a minimal but complete XMRig-compatible Stratum server (~730 lines, zero dependencies) that implements VS3 ghost share detection, frame reassembly, and bidirectional message delivery. It demonstrates a **VS3-aware pool** — the alternative deployment model to the proxy (see `poc/`).
 
-This is NOT a production pool. It is a proof-of-concept that demonstrates the VS3 transport mechanism in isolation. Encryption, TLS, and Mining Gate are implemented in the [reference implementation](https://github.com/tnzx-project/tnzx-protocol/tree/main/reference-impl) and are not wired into this demo.
+This is NOT a production pool. It is a proof-of-concept that demonstrates the VS3 transport mechanism in isolation. Encryption, TLS, and Mining Gate are implemented in the [reference implementation](https://github.com/tnzx-project/tnzx-protocol/tree/master/reference-impl) and are not wired into this demo.
 
 ---
 
