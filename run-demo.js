@@ -15,12 +15,12 @@ const ALICE_WALLET = '4' + 'A'.repeat(94);
 const BOB_WALLET   = '4' + 'B'.repeat(94);
 
 const MESSAGES = [
-  { from: 'alice', text: 'Meeting confirmed for Thursday. The dissident group has 40 members ready.' },
-  { from: 'bob',   text: 'Understood. We secured 3 safe houses outside the capital.' },
-  { from: 'alice', text: 'The regime blocked Signal and Tor last week. This channel is all we have.' },
-  { from: 'bob',   text: 'Press contacts in Berlin and DC are standing by. Send the documents when ready.' },
-  { from: 'alice', text: 'Uploading now. 14 pages of evidence. The world needs to see this.' },
-  { from: 'bob',   text: 'Received. We will publish simultaneously across 6 outlets. Stay safe.' },
+  { from: 'alice', text: 'Test message 1: key exchange complete, channel established.' },
+  { from: 'bob',   text: 'Test message 2: acknowledged, receiving on this end.' },
+  { from: 'alice', text: 'Test message 3: sending a longer payload to exercise fragmentation across multiple frames.' },
+  { from: 'bob',   text: 'Test message 4: fragments reassembled correctly, checksum OK.' },
+  { from: 'alice', text: 'Test message 5: round-trip latency looks good under the 150ms pacing.' },
+  { from: 'bob',   text: 'Test message 6: demo complete, closing session.' },
 ];
 
 function log(tag, msg) {
