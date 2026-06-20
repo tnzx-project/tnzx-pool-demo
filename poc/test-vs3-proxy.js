@@ -26,9 +26,32 @@ const net = require('net');
 const VS3Proxy = require('./vs3-proxy.js');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
+// Ports are configurable via env vars or CLI args to avoid EADDRINUSE on systems
+// where the default ports are already bound (e.g., CI runners, developer machines
+// running a local pool). If the requested port is busy, the test automatically
+// binds to an ephemeral port (port 0 → OS-assigned).
 
-const MOCK_POOL_PORT = 13334;
-const PROXY_PORT     = 14444;
+/**
+ * Try to listen on `preferred`; if EADDRINUSE, fall back to port 0 (OS picks a free one).
+ * Returns the actual port the server is listening on.
+ */
+function listenOrFallback(server, preferred) {
+  return new Promise((resolve, reject) => {
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        // Preferred port busy — let the OS assign a free one
+        server.listen(0, () => resolve(server.address().port));
+      } else {
+        reject(err);
+      }
+    });
+    server.listen(preferred, () => resolve(server.address().port));
+  });
+}
+
+// Default ports chosen to avoid common services. Override with env vars or CLI args.
+const PREFERRED_POOL_PORT  = parseInt(process.env.TEST_POOL_PORT  || process.argv[2] || '0', 10);
+const PREFERRED_PROXY_PORT = parseInt(process.env.TEST_PROXY_PORT || process.argv[3] || '0', 10);
 const SENDER_WALLET  = '4' + '2'.repeat(94);
 const RECIP_WALLET   = '4' + '1'.repeat(94);
 const TEST_MESSAGE   = 'Hello from VS3 proxy!';
@@ -46,9 +69,9 @@ class MockPool {
   }
 
   start() {
-    return new Promise((resolve) => {
-      this.server = net.createServer((sock) => this._onConnect(sock));
-      this.server.listen(this.port, () => resolve());
+    this.server = net.createServer((sock) => this._onConnect(sock));
+    return listenOrFallback(this.server, this.port).then((actualPort) => {
+      this.port = actualPort;
     });
   }
 
@@ -160,6 +183,36 @@ function encodeRealShare(reqId, minerId, jobId) {
 
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+/**
+ * Start the VS3Proxy with EADDRINUSE fallback on both Stratum and WS ports.
+ * Replaces proxy.start() which crashes on busy ports.
+ *
+ * @param {VS3Proxy} proxy - The proxy instance (not yet started)
+ * @param {number} preferredStratumPort - Preferred Stratum port (0 = OS picks)
+ * @param {number} preferredWsPort - Preferred WS port (0 = OS picks)
+ */
+async function _startProxyWithFallback(proxy, preferredStratumPort, preferredWsPort) {
+  // Periodic cleanup of stale rate limit entries
+  proxy._rateLimitCleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of proxy.ghostRateByIp) {
+      if (now >= entry.resetAt) proxy.ghostRateByIp.delete(ip);
+    }
+  }, 120000);
+
+  // Stratum proxy — fallback-aware
+  proxy.server = net.createServer((s) => proxy._onMinerConnect(s));
+  proxy.listenPort = await listenOrFallback(proxy.server, preferredStratumPort);
+
+  // WebSocket relay — fallback-aware
+  const http = require('http');
+  proxy.wsServer = http.createServer((req, res) => { res.writeHead(404); res.end(); });
+  proxy.wsServer.on('upgrade', (req, socket) => proxy._onWsUpgrade(req, socket));
+  proxy.wsPort = await listenOrFallback(proxy.wsServer, preferredWsPort);
+
+  proxy.emit('listening', { stratum: proxy.listenPort, ws: proxy.wsPort });
+}
+
 async function run() {
   console.log('');
   console.log('================================================================');
@@ -169,15 +222,24 @@ async function run() {
   console.log('');
 
   // ── Step 1: Start mock pool ──
-  const pool = new MockPool(MOCK_POOL_PORT);
+  const pool = new MockPool(PREFERRED_POOL_PORT);
   await pool.start();
-  console.log(`[1] Mock standard pool listening on :${MOCK_POOL_PORT}`);
+  const actualPoolPort = pool.port;
+  console.log(`[1] Mock standard pool listening on :${actualPoolPort}` +
+    (actualPoolPort !== PREFERRED_POOL_PORT ? ` (fallback from :${PREFERRED_POOL_PORT})` : ''));
 
   // ── Step 2: Start VS3 proxy ──
+  // The proxy itself also uses listenOrFallback for its Stratum and WS ports.
+  // We pass the actual pool port as upstream (it may differ from the preferred one).
+  // Note: _startProxyWithFallback overrides the listen ports with actual bound
+  // ports, so the values passed to the constructor are only preferred hints.
+  // VS3Proxy constructor treats 0 as falsy (defaults to 14444), so we pass
+  // PREFERRED_PROXY_PORT directly only if non-zero.
   const proxy = new VS3Proxy({
-    listenPort: PROXY_PORT,
+    listenPort: PREFERRED_PROXY_PORT || 14444,
+    wsPort: (PREFERRED_PROXY_PORT || 14444) + 1,
     upstreamHost: '127.0.0.1',
-    upstreamPort: MOCK_POOL_PORT,
+    upstreamPort: actualPoolPort,
     hmacSalt: false, // legacy 0xAA mode for this test (HMAC tested in test-hmac-sentinel.js)
   });
 
@@ -186,12 +248,16 @@ async function run() {
     assembledMessage = evt;
   });
 
-  await proxy.start();
-  console.log(`[2] VS3 proxy listening on :${PROXY_PORT} -> upstream :${MOCK_POOL_PORT}`);
+  // Override proxy.start() to use fallback-aware binding.
+  // Pass the raw preferred ports (may be 0 for ephemeral).
+  await _startProxyWithFallback(proxy, PREFERRED_PROXY_PORT, PREFERRED_PROXY_PORT ? PREFERRED_PROXY_PORT + 1 : 0);
+  const actualProxyPort = proxy.listenPort;
+  console.log(`[2] VS3 proxy listening on :${actualProxyPort} -> upstream :${actualPoolPort}` +
+    (actualProxyPort !== PREFERRED_PROXY_PORT ? ` (fallback from :${PREFERRED_PROXY_PORT})` : ''));
 
   // ── Step 3: Connect VS3 miner to proxy ──
   const client = await new Promise((resolve, reject) => {
-    const sock = net.createConnection(PROXY_PORT, '127.0.0.1', () => resolve(sock));
+    const sock = net.createConnection(actualProxyPort, '127.0.0.1', () => resolve(sock));
     sock.on('error', reject);
   });
   client.setEncoding('utf8');

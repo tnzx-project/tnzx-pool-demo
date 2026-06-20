@@ -5,7 +5,7 @@
   "main": "src/stratum-demo.js",
   "scripts": {
     "start": "node src/stratum-demo.js",
-    "test": "node poc/test-vs3-proxy.js && node poc/test-hmac-sentinel.js && node poc/test-dpi-steganalysis.js"
+    "test": "node poc/run-tests.js"
   },
   "license": "LGPL-2.1",
   "repository": {
